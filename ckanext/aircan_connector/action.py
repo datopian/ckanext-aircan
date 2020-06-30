@@ -12,13 +12,14 @@ log = logging.getLogger(__name__)
 
 def datapusher_submit(context, data_dict):
     log.info("Submitting resource via API")
+
     try:
         res_id = data_dict['resource_id']
         resource = get_resource_and_dataset(res_id)
         resource_url = resource.get('url')
         # fetch the resource data
         log.info('Fetching from: {0}'.format(resource_url))
-        tmp_file = get_tmp_file(resource_url)
+        tmp_file = get_tmp_file(resource_url, config)
         log.info('tmp_file.name: {0}'.format(tmp_file.name))
         #records = read_from_file(tmp_file.name)
         #log.info("records")
@@ -28,7 +29,7 @@ def datapusher_submit(context, data_dict):
         payload = {
             "conf": {
                 "resource_i": res_id,
-                "schema_fields_array": ["id", "full_text", "FID"],
+                "schema_fields_array": [ "FID", "Mkt-RF", "SMB", "HML", "RF" ],
                 "csv_input": tmp_file.name,
                 "json_output": json_output_file_path
             }
@@ -36,11 +37,10 @@ def datapusher_submit(context, data_dict):
         url = config['ckan.airflow.url']
         log.info("Airflow URL: {0}".format(url))
         response = requests.post(url,
-                                 data=payload,
+                                 data=json.dumps(payload),
                                  headers={'Content-Type': 'application/json',
                                           'Cache-Control': 'no-cache'}
                                  )
-        #log.info(response)
         response.raise_for_status()
         log.info(response.json())
         return response.json()
@@ -62,10 +62,10 @@ def get_resource_and_dataset(resource_id):
     res_dict = get_action('resource_show')(None, {'id': resource_id})
     return res_dict
 
-def get_tmp_file(url):
+def get_tmp_file(url, config):
     filename = url.split('/')[-1].split('#')[0].split('?')[0]
     log.info('get_tmp_file filename: {0}'.format(filename))
-    tmp_file = tempfile.NamedTemporaryFile(suffix=filename)
+    tmp_file = tempfile.NamedTemporaryFile(suffix=filename, dir=config['ckan.storage_path'])
     return tmp_file
 
 def read_from_file(filename):
