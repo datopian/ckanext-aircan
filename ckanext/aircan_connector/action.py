@@ -1,58 +1,63 @@
 # encoding: utf-8
-
+import os
 import requests
 from ckan.common import config
 from ckan.plugins.toolkit import get_action
-#import urlparse
 import logging
 import json
-import tempfile
+import time
+import urlparse
 
 log = logging.getLogger(__name__)
 
+
 def datapusher_submit(context, data_dict):
-    log.info("Submitting resource via API")
+    log.info("Submitting resource via Aircan")
 
     try:
         res_id = data_dict['resource_id']
-        resource = get_resource_and_dataset(res_id)
-        resource_url = resource.get('url')
-        # fetch the resource data
-        log.info('Fetching from: {0}'.format(resource_url))
-        tmp_file = get_tmp_file(resource_url, config)
-        log.info('tmp_file.name: {0}'.format(tmp_file.name))
-        #records = read_from_file(tmp_file.name)
-        #log.info("records")
-        #log.info(records)
-        json_output_file_path = config['ckan.storage_path']+'/my.json'
+
+        try:
+            resource, dataset = get_resource_and_dataset(res_id)
+        except Exception as e:
+            # try again in 5 seconds just in case CKAN is slow at adding resource
+            time.sleep(5)
+            resource, dataset = get_resource_and_dataset(res_id)
+
+        resource_download_url = '/dataset/{}/resource/{}/download/{}' \
+            .format(dataset['name'], resource['id'], resource['name'])
+
+        ckan_site_url = config['ckan.site_url']
+        resource_ckan_url = urlparse.urljoin(ckan_site_url, resource_download_url)
+        log.info("resource_ckan_url: {}".format(resource_ckan_url))
+
+        json_output_file_name = os.path.splitext(resource['name'])[0]+'.json'
+        ckan_airflow_storage_path = config['ckan.airflow.storage_path']
+        json_output_file_path = ckan_airflow_storage_path + json_output_file_name
         log.info("json_output_file_path : {0}".format(json_output_file_path))
+
         payload = {
             "conf": {
-                "resource_i": res_id,
+                "resource_id": res_id,
                 "schema_fields_array": [ "FID", "Mkt-RF", "SMB", "HML", "RF" ],
-                "csv_input": tmp_file.name,
+                "csv_input": resource_ckan_url,
                 "json_output": json_output_file_path
             }
         }
-        url = config['ckan.airflow.url']
-        log.info("Airflow URL: {0}".format(url))
-        response = requests.post(url,
+
+        ckan_airflow_endpoint_url = config['ckan.airflow.url']
+        log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
+        response = requests.post(ckan_airflow_endpoint_url,
                                  data=json.dumps(payload),
                                  headers={'Content-Type': 'application/json',
                                           'Cache-Control': 'no-cache'}
                                  )
+        log.info(response)
         response.raise_for_status()
-        log.info(response.json())
+        log.info('AirCan Load completed')
         return response.json()
     except Exception as e:
         return {"success": False, "errors": [e]}
-
-    #url = 'http://ckan:8081/api/experimental/dags/ckan_api_load_multiple_steps/dag_runs'
-    #log.info("Aircan URL: " + url)
-    #response = requests.get(url)
-    ##response = requests.post(self.url, data=payload, headers=self.headers)
-    #response.raise_for_status()
-    #return response.json()
 
 
 def get_resource_and_dataset(resource_id):
@@ -60,16 +65,6 @@ def get_resource_and_dataset(resource_id):
     Gets available information about the resource and its dataset from CKAN
     """
     res_dict = get_action('resource_show')(None, {'id': resource_id})
-    return res_dict
+    pkg_dict = get_action('package_show')(None, {'id': res_dict['package_id']})
+    return res_dict, pkg_dict
 
-def get_tmp_file(url, config):
-    filename = url.split('/')[-1].split('#')[0].split('?')[0]
-    log.info('get_tmp_file filename: {0}'.format(filename))
-    tmp_file = tempfile.NamedTemporaryFile(suffix=filename, dir=config['ckan.storage_path'])
-    return tmp_file
-
-def read_from_file(filename):
-    content = None
-    with open(filename, 'r') as fd:
-        content = fd.read()
-    return content
