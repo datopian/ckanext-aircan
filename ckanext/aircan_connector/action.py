@@ -61,6 +61,8 @@ def datapusher_submit(context, data_dict):
         else:
             log.info("Invoking Airflow on Google Cloud Composer")
             invoke_gcp(config, payload)
+    except Exception as e:
+        return {"success": False, "errors": [e]}
 
 
 def get_resource_and_dataset(resource_id):
