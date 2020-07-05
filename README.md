@@ -19,3 +19,24 @@ You have a CKAN instance up and running - [instructions](https://github.com/okfn
 5. Access your CKAN and upload of modify a resource. You must select a resource type. At this time, we support `CSV` only. 
 
 
+## Running on GCP
+
+Assuming you already have a Google Cloud Composer properly set up, it is possible to trigger a DAG on GoogleCloud Platform following these steps:
+
+1. Download your credentials file (a JSON file) from Google Cloud Platform. Convert it to a single-line JSON.
+
+2. Set up the following environment variables on your `.env` file:
+
+```bash
+CKAN__AIRFLOW__CLOUD=GCP # this line activates the integration with GCP
+CKAN__AIRFLOW__CLOUD__PROJECT_ID=YOUR_PROJECT_ID_ON_COMPOSER
+CKAN__AIRFLOW__CLOUD__LOCATION=us-east1_OR_OTHER
+CKAN__AIRFLOW__CLOUD__COMPOSER_ENVIRONMENT= NAME_OF_COMPOSER_ENVIRONMENT
+CKAN__AIRFLOW__CLOUD__DAG_NAME= DAG_YOU_WANT_TO_TRIGGER
+CKAN__AIRFLOW__CLOUD__WEB_UI_ID= ID_FROM_AIRFLOW_UI_ON_COMPOSER
+CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_CREDENTIALS={ YOUR SINGLE LINE CREDENTIALS JSON FILE }
+``` 
+
+
+
+

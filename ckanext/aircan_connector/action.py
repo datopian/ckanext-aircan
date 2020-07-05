@@ -8,6 +8,8 @@ import json
 import time
 import urlparse
 
+from gcp_handler import GCPHandler
+
 log = logging.getLogger(__name__)
 
 
@@ -44,18 +46,21 @@ def datapusher_submit(context, data_dict):
                 "json_output": json_output_file_path
             }
         }
-
-        ckan_airflow_endpoint_url = config['ckan.airflow.url']
-        log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
-        response = requests.post(ckan_airflow_endpoint_url,
-                                 data=json.dumps(payload),
-                                 headers={'Content-Type': 'application/json',
-                                          'Cache-Control': 'no-cache'}
-                                 )
-        log.info(response)
-        response.raise_for_status()
-        log.info('AirCan Load completed')
-        return response.json()
+        if config['ckan.airflow.cloud'] != "GCP": 
+            ckan_airflow_endpoint_url = config['ckan.airflow.url']
+            log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
+            response = requests.post(ckan_airflow_endpoint_url,
+                                     data=json.dumps(payload),
+                                     headers={'Content-Type': 'application/json',
+                                              'Cache-Control': 'no-cache'}
+                                     )
+            log.info(response)
+            response.raise_for_status()
+            log.info('AirCan Load completed')
+            return response.json()
+        else:
+            log.info("Invoking Airflow on Google Cloud Composer")
+            invoke_gcp(config, payload)
     except Exception as e:
         return {"success": False, "errors": [e]}
 
@@ -68,3 +73,9 @@ def get_resource_and_dataset(resource_id):
     pkg_dict = get_action('package_show')(None, {'id': res_dict['package_id']})
     return res_dict, pkg_dict
 
+
+def invoke_gcp(config, payload):
+    log.info('Invoking GCP')
+    gcp = GCPHandler(config, payload)
+    log.info('Handler created')
+    return gcp.trigger_dag()
