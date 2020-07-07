@@ -3,10 +3,12 @@ import os
 import requests
 from ckan.common import config
 from ckan.plugins.toolkit import get_action
+import ckan.plugins as p
 import logging
 import json
 import time
 import urlparse
+from util import get_file_headers
 
 from gcp_handler import GCPHandler
 
@@ -17,6 +19,8 @@ def datapusher_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
 
     try:
+        user = p.toolkit.get_action('user_show')(context, {'id': context['user']})
+        user_api_key = user['apikey']
         res_id = data_dict['resource_id']
 
         try:
@@ -38,15 +42,23 @@ def datapusher_submit(context, data_dict):
         json_output_file_path = ckan_airflow_storage_path + json_output_file_name
         log.info("json_output_file_path : {0}".format(json_output_file_path))
 
+        schema_fields_array = []
+        try:
+            schema_fields_array = get_file_headers(resource, user_api_key)
+        except Exception as ex:
+            log.info("File headers detection error: {}".format(ex))
+
+        log.info("schema_fields_array: {}".format(schema_fields_array))
+
         payload = {
             "conf": {
                 "resource_id": res_id,
-                "schema_fields_array": [ "FID", "Mkt-RF", "SMB", "HML", "RF" ],
+                "schema_fields_array": schema_fields_array,
                 "csv_input": resource_ckan_url,
                 "json_output": json_output_file_path
             }
         }
-        if config['ckan.airflow.cloud'] != "GCP": 
+        if config['ckan.airflow.cloud'] != "GCP":
             ckan_airflow_endpoint_url = config['ckan.airflow.url']
             log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
             response = requests.post(ckan_airflow_endpoint_url,
@@ -73,9 +85,14 @@ def get_resource_and_dataset(resource_id):
     pkg_dict = get_action('package_show')(None, {'id': res_dict['package_id']})
     return res_dict, pkg_dict
 
-
 def invoke_gcp(config, payload):
     log.info('Invoking GCP')
     gcp = GCPHandler(config, payload)
     log.info('Handler created')
     return gcp.trigger_dag()
+
+
+
+
+
+
