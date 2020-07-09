@@ -65,7 +65,7 @@ class GCPHandler:
             + '/dag_runs'
         )
         # Make a POST request to IAP which then Triggers the DAG
-        return self.make_iap_request(webserver_url, client_id, method='POST', json={"conf": self.payload})
+        return self.make_iap_request(webserver_url, client_id, method='POST', json=self.payload)
 
 
     def get_google_token_id(self, client_id):
@@ -79,7 +79,7 @@ class GCPHandler:
     def make_iap_request(self, url, client_id, method='GET', **kwargs):
         if 'timeout' not in kwargs:
             kwargs['timeout'] = 90
-        
+        log.info("IAP request started")
         google_open_id_connect_token = self.get_google_token_id(client_id)
         resp = requests.request(
             method, url,

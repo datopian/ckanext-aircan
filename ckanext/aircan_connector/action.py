@@ -60,6 +60,14 @@ def datapusher_submit(context, data_dict):
             return response.json()
         else:
             log.info("Invoking Airflow on Google Cloud Composer")
+            payload = {
+            "conf": {
+                "resource_id": res_id,
+                "schema_fields_array": [ "FID", "Mkt-RF", "SMB", "HML", "RF" ],
+                "csv_input": resource['url'],
+                "json_output": config['ckan.airflow.cloud.tmp_json']
+                }
+            }
             invoke_gcp(config, payload)
     except Exception as e:
         return {"success": False, "errors": [e]}
