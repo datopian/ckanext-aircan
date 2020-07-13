@@ -96,3 +96,7 @@ class GCPHandler:
                     resp.status_code, resp.headers, resp.text))
         else:
             return resp.text
+
+
+    def download_processed_file(self, resource_id):
+        

@@ -73,6 +73,23 @@ def datapusher_submit(context, data_dict):
         return {"success": False, "errors": [e]}
 
 
+def processed_response(context, data_dict):
+    log.info("HTTP endpoint hit by Airflow")
+
+    try:
+        res_id = data_dict['resource_id']
+        airflow_process_status = data_dict['airflow_process_status']
+        resource, dataset = get_resource_and_dataset(res_id)
+        if airflow_process_status == "download_ready":
+            log.info('Invoking GCP')
+            gcp = GCPHandler(config, {})
+            gcp.download_processed_file(resource_id)
+        else:
+            return {"success": False, "airflow_process_status": [airflow_process_status]}
+    except Exception as e:
+        return {"success": False, "errors": [e]}    
+
+
 def get_resource_and_dataset(resource_id):
     """
     Gets available information about the resource and its dataset from CKAN

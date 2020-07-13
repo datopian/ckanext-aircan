@@ -86,7 +86,8 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     # IActions
     def get_actions(self):
         return {
-            'datapusher_submit': action.datapusher_submit
+            'datapusher_submit': action.datapusher_submit,
+            'processed_response': action.processed_response
         }
 
 

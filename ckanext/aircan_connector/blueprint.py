@@ -15,6 +15,12 @@ class ResourceDataView(MethodView):
                     u'resource_id': resource_id
                 }
             )
+            toolkit.get_action(u'processed_response')(
+                None, {
+                    u'resource_id': resource_id,
+                    u'airflow_process_status': airflow_process_status
+                }
+            )
         except logic.ValidationError:
             pass
 
@@ -25,5 +31,10 @@ class ResourceDataView(MethodView):
 
 aircan.add_url_rule(
     u'/dataset/<id>/resource_data/<resource_id>',
+    view_func=ResourceDataView.as_view(str(u'resource_data'))
+)
+
+aircan.add_url_rule(
+    u'/dataset/<id>/resource_data/<resource_id>/processed_result',
     view_func=ResourceDataView.as_view(str(u'resource_data'))
 )
