@@ -20,16 +20,16 @@ class GCPHandler:
         self.payload = payload
 
     def get_auth_session(self):
-        local_config_str = self.config['ckan.airflow.cloud.google_application_credentials']
+        local_config_str = self.config.get('ckan.airflow.cloud.google_application_credentials')
         parsed_credentials = json.loads(local_config_str)
         credentials = service_account.Credentials.from_service_account_info(parsed_credentials, scopes=['https://www.googleapis.com/auth/cloud-platform'])
         authed_session = AuthorizedSession(credentials)
         return authed_session
 
     def get_env_url(self):
-        project_id = self.config['ckan.airflow.cloud.project_id']
-        location = self.config['ckan.airflow.cloud.location']
-        composer_environment = self.config['ckan.airflow.cloud.composer_environment']
+        project_id = self.config.get('ckan.airflow.cloud.project_id')
+        location = self.config.get('ckan.airflow.cloud.location')
+        composer_environment = self.config.get('ckan.airflow.cloud.composer_environment')
         environment_url = (
             'https://composer.googleapis.com/v1beta1/projects/{}/locations/{}'
             '/environments/{}').format(project_id, location, composer_environment)
@@ -55,8 +55,8 @@ class GCPHandler:
         client_id = self.client_setup()
         # This should be part of your webserver's URL:
         # {tenant-project-id}.appspot.com
-        webserver_id = self.config['ckan.airflow.cloud.web_ui_id']
-        dag_name = self.config['ckan.airflow.cloud.dag_name']
+        webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
+        dag_name = self.config.get('ckan.airflow.cloud.dag_name')
         webserver_url = (
             'https://'
             + webserver_id
@@ -69,7 +69,7 @@ class GCPHandler:
 
 
     def get_google_token_id(self, client_id):
-        local_config_str = self.config['ckan.airflow.cloud.google_application_credentials']
+        local_config_str = self.config.get('ckan.airflow.cloud.google_application_credentials')
         parsed_credentials = json.loads(local_config_str)
         credentials = service_account.IDTokenCredentials.from_service_account_info(parsed_credentials, target_audience=client_id)
         request = Request()

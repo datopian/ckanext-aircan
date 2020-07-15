@@ -29,12 +29,12 @@ def datapusher_submit(context, data_dict):
         resource_download_url = '/dataset/{}/resource/{}/download/{}' \
             .format(dataset['name'], resource['id'], resource['name'])
 
-        ckan_site_url = config['ckan.site_url']
+        ckan_site_url = config.get('ckan.site_url')
         resource_ckan_url = urlparse.urljoin(ckan_site_url, resource_download_url)
         log.info("resource_ckan_url: {}".format(resource_ckan_url))
 
         json_output_file_name = os.path.splitext(resource['name'])[0]+'.json'
-        ckan_airflow_storage_path = config['ckan.airflow.storage_path']
+        ckan_airflow_storage_path = config.get('ckan.airflow.storage_path')
         json_output_file_path = ckan_airflow_storage_path + json_output_file_name
         log.info("json_output_file_path : {0}".format(json_output_file_path))
 
@@ -46,8 +46,8 @@ def datapusher_submit(context, data_dict):
                 "json_output": json_output_file_path
             }
         }
-        if config['ckan.airflow.cloud'] != "GCP": 
-            ckan_airflow_endpoint_url = config['ckan.airflow.url']
+        if config.get('ckan.airflow.cloud','local') != "GCP":
+            ckan_airflow_endpoint_url = config.get('ckan.airflow.url')
             log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
             response = requests.post(ckan_airflow_endpoint_url,
                                      data=json.dumps(payload),
