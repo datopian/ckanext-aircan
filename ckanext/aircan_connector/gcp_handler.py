@@ -6,7 +6,7 @@ import six.moves.urllib.parse
 import logging
 import json
 from google.auth.transport.requests import Request, AuthorizedSession
-
+from google.cloud import storage
 from google.oauth2 import id_token, service_account
 
 log = logging.getLogger(__name__)
@@ -86,7 +86,8 @@ class GCPHandler:
             headers={'Authorization': 'Bearer {}'.format(
                 google_open_id_connect_token)}, **kwargs)
         log.info('Request sent to GCP. Response code: {!r} '.format(resp.status_code))
-        
+        log.info(url)
+        log.info(resp.content)
         if resp.status_code == 403:
             raise Exception('Service account does not have permission to '
                             'access the IAP-protected application.')
@@ -99,4 +100,9 @@ class GCPHandler:
 
 
     def download_processed_file(self, resource_id):
-        
+        log.info('Download')
+        local_config_str = self.config['ckan.airflow.cloud.google_application_credentials']
+        parsed_credentials = json.loads(local_config_str)
+        credentials = service_account.Credentials.from_service_account_info(parsed_credentials, scopes=['https://www.googleapis.com/auth/cloud-platform'])
+        project_id = self.config['ckan.airflow.cloud.project_id']
+        storage_client = storage.Client(project=project_id, credentials=credentials)

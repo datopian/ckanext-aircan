@@ -24,7 +24,7 @@ DEFAULT_FORMATS = [
 class Aircan_ConnectorPlugin(p.SingletonPlugin):
     p.implements(p.IConfigurer, inherit=True)
     p.implements(p.IResourceUrlChange)
-    #p.implements(p.IBlueprint)
+    p.implements(p.IBlueprint)
     p.implements(p.IActions)
     p.implements(p.IResourceController, inherit=True)
 
@@ -92,5 +92,5 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
 
 
     # IBlueprint
-    #def get_blueprint(self):
-    #    return blueprint.aircan
+    def get_blueprint(self):
+       return blueprint.aircan

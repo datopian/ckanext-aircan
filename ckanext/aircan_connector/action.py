@@ -75,10 +75,11 @@ def datapusher_submit(context, data_dict):
 
 def processed_response(context, data_dict):
     log.info("HTTP endpoint hit by Airflow")
-
+    log.info(data_dict)
     try:
         res_id = data_dict['resource_id']
         airflow_process_status = data_dict['airflow_process_status']
+        
         resource, dataset = get_resource_and_dataset(res_id)
         if airflow_process_status == "download_ready":
             log.info('Invoking GCP')
