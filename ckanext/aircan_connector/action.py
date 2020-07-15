@@ -46,7 +46,7 @@ def datapusher_submit(context, data_dict):
                 "json_output": json_output_file_path
             }
         }
-        if config['ckan.airflow.cloud'] != "GCP": 
+        if config.get('ckan.airflow.cloud','local') != "GCP":
             ckan_airflow_endpoint_url = config['ckan.airflow.url']
             log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
             response = requests.post(ckan_airflow_endpoint_url,
