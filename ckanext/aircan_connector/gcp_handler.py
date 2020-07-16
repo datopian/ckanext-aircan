@@ -65,7 +65,7 @@ class GCPHandler:
             + '/dag_runs'
         )
         # Make a POST request to IAP which then Triggers the DAG
-        return self.make_iap_request(webserver_url, client_id, method='POST', json={"conf": self.payload})
+        return self.make_iap_request(webserver_url, client_id, method='POST', json=self.payload)
 
 
     def get_google_token_id(self, client_id):
