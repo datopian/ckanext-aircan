@@ -74,7 +74,8 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
             )
             toolkit.get_action(u'datapusher_submit')(
                 context, {
-                    u'resource_id': resource_dict['id']
+                    u'resource_id': resource_dict['id'],
+                    u'resource_json': resource_dict
                 }
             )
         except toolkit.ValidationError as e:
