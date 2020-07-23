@@ -24,18 +24,23 @@ def datapusher_submit(context, data_dict):
         ckan_api_key = user['apikey']
         
         ckan_resource = data_dict.get('resource_json', {})
-        log.info(ckan_resource.get('url'))
+
         payload = { 
             "conf": {
-                "path": ckan_resource.get('url'),
-                "format": ckan_resource.get('format'),
-                "ckan_resource_id": res_id,
-                "schema": ckan_resource.get('schema'),
-                "ckan_api_key": ckan_api_key,
-                "ckan_site_url": config.get('ckan.site_url'),
+                "resource": {
+                    "path": ckan_resource.get('url'),
+                    "format": ckan_resource.get('format'),
+                    "ckan_resource_id": res_id,
+                    "schema": ckan_resource.get('schema')
+                },
+                "ckan_config": {
+                    "api_key": ckan_api_key,
+                    "site_url": config.get('ckan.site_url'),    
+                },
                 "output_bucket": str(date.today())
             }
         }
+        log.info(payload)
 
         if config.get('ckan.airflow.cloud','local') != "GCP":
             ckan_airflow_endpoint_url = config.get('ckan.airflow.url')
