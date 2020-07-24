@@ -37,6 +37,18 @@ CKAN__AIRFLOW__CLOUD__WEB_UI_ID= ID_FROM_AIRFLOW_UI_ON_COMPOSER
 CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_CREDENTIALS={ YOUR SINGLE LINE CREDENTIALS JSON FILE }
 ``` 
 
+# Tests with Cypress
+Test the aircan-connector with cypress.
 
+## Installation
+
+`npm install`
+
+
+## Running
+
+Opens up the cypress app and you can choose the specs to run.
+
+`npm test`
 
 

@@ -1,0 +1,16 @@
+{
+  "name": "cypress-tests",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "cy:verify": "cypress verify",
+    "cy:info": "cypress info",
+    "test": "$(npm bin)/cypress open",
+    "test:headless": "$(npm bin)/cypress run --headless"
+  },
+  "dependencies": {
+    "cypress-file-upload": "^4.0.7",
+    "cypress": "^4.9.0"
+  }
+}
