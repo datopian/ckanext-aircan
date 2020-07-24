@@ -1,0 +1,5 @@
+{
+  "chromeWebSecurity": false,
+  "baseUrl": "http://34.238.192.87:5000/",
+  "pageLoadTimeout": 120000
+}
