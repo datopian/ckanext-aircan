@@ -25,17 +25,61 @@ def datapusher_submit(context, data_dict):
         
         ckan_resource = data_dict.get('resource_json', {})
 
+        '''Sample schema structure we are expecting to receive frfom ckan_resource.get('schema')
+            schema = {
+                "fields": [
+                    {
+                        "name": "FID",
+                        "title": "FID",
+                        "type": "number",
+                        "description": "FID`"
+                    },
+                    {
+                        "name": "MktRF",
+                        "title": "MktRF",
+                        "type": "number",
+                        "description": "MktRF`"
+                    },
+                    {
+                        "name": "SMB",
+                        "title": "SMB",
+                        "type": "number",
+                        "description": "SMB`"
+                    },
+                    {
+                        "name": "HML",
+                        "title": "HML",
+                        "type": "number",
+                        "description": "HML`"
+                    },
+                    {
+                        "name": "RF",
+                        "title": "RF",
+                        "type": "number",
+                        "description": "RF`"
+                    }
+                ]
+        }
+        '''
+
+        table_schema = ckan_resource.get('schema')
+        schema = json.dumps(table_schema)
+
         payload = { 
             "conf": {
                 "resource": {
                     "path": ckan_resource.get('url'),
                     "format": ckan_resource.get('format'),
                     "ckan_resource_id": res_id,
-                    "schema": ckan_resource.get('schema')
+                    "schema": schema
                 },
                 "ckan_config": {
                     "api_key": ckan_api_key,
                     "site_url": config.get('ckan.site_url'),    
+                },
+                "big_query": {
+                    "bq_project_id": config.get('ckanext.bigquery.project', 'NA'),
+                    "bq_dataset_id": config.get('ckanext.bigquery.dataset', 'NA')
                 },
                 "output_bucket": str(date.today())
             }
