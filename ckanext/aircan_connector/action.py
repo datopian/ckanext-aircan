@@ -108,3 +108,9 @@ def invoke_gcp(config, payload):
     gcp = GCPHandler(config, payload)
     log.info('Handler created')
     return gcp.trigger_dag()
+
+
+def aircan_submit(context, data_dict):
+    log.info("Aircan submit action")
+    resource = get_action('resource_create')(context, data_dict)
+    return resource
