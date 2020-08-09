@@ -95,4 +95,4 @@ class GCPHandler:
                 'Bad response from application: {!r} / {!r} / {!r}'.format(
                     resp.status_code, resp.headers, resp.text))
         else:
-            return resp.text
+            return resp.json()

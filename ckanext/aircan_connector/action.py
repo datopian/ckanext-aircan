@@ -8,8 +8,11 @@ import logging
 import json
 import time
 import urlparse
-
+from ckan.common import request
 from gcp_handler import GCPHandler
+
+REACHED_RESOPONSE  = False
+AIRCAN_RESPONSE_AFTER_SUBMIT = None
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +22,6 @@ def datapusher_submit(context, data_dict):
     
     try:
         res_id = data_dict['resource_id']
-        log.info(data_dict)
         user = get_action('user_show')(context, {'id': context['user']})
         ckan_api_key = user['apikey']
         
@@ -85,6 +87,9 @@ def datapusher_submit(context, data_dict):
             }
         }
         log.info(payload)
+        global REACHED_RESOPONSE
+        REACHED_RESOPONSE = True
+        global AIRCAN_RESPONSE_AFTER_SUBMIT 
 
         if config.get('ckan.airflow.cloud','local') != "GCP":
             ckan_airflow_endpoint_url = config.get('ckan.airflow.url')
@@ -93,12 +98,17 @@ def datapusher_submit(context, data_dict):
                                      data=json.dumps(payload),
                                      headers={'Content-Type': 'application/json',
                                               'Cache-Control': 'no-cache'})
+            log.info(response.text)
             response.raise_for_status()
             log.info('AirCan Load completed')
-            return response.json()
+            
+            AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": response.json()}
         else:
             log.info("Invoking Airflow on Google Cloud Composer")
-            invoke_gcp(config, payload)
+            dag_name = request.params.get('dag_name')
+            config['ckan.airflow.cloud.dag_name'] = dag_name
+            gcp_response = invoke_gcp(config, payload)
+            AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
     except Exception as e:
         return {"success": False, "errors": [e]}
 
@@ -113,4 +123,5 @@ def invoke_gcp(config, payload):
 def aircan_submit(context, data_dict):
     log.info("Aircan submit action")
     resource = get_action('resource_create')(context, data_dict)
-    return resource
+    if REACHED_RESOPONSE == True:
+        return AIRCAN_RESPONSE_AFTER_SUBMIT

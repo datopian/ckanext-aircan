@@ -36,7 +36,6 @@ CKAN__AIRFLOW__CLOUD=GCP # this line activates the integration with GCP
 CKAN__AIRFLOW__CLOUD__PROJECT_ID=YOUR_PROJECT_ID_ON_COMPOSER
 CKAN__AIRFLOW__CLOUD__LOCATION=us-east1_OR_OTHER
 CKAN__AIRFLOW__CLOUD__COMPOSER_ENVIRONMENT=NAME_OF_COMPOSER_ENVIRONMENT
-CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER  (possibly ckan_api_load_gcp)
 CKAN__AIRFLOW__CLOUD__WEB_UI_ID=ID_FROM_AIRFLOW_UI_ON_COMPOSER
 CKAN__AIRFLOW__CLOUD__TMP_JSON=/home/airflow/gcs/dags/tmp.json
 CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_CREDENTIALS={ YOUR SINGLE LINE CREDENTIALS JSON FILE }
@@ -44,7 +43,7 @@ CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_CREDENTIALS={ YOUR SINGLE LINE CREDENTI
 
 Here, we are using the DAG `ckan_api_load_gcp` for uploading a resource to CKAN using an Airflow instance on Google Cloud.
 
-3. Make a request to `http://YOUR-CKAN:5000/api/3/action/resource_create`, specifying your `CKAN_API_KEY` on the header and send the following information on the body of the request, replacing the values accordingly:
+3. Make a request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`, specifying your `CKAN_API_KEY` on the header and send the following information on the body of the request, replacing the values accordingly:
 
 ```json
 {
@@ -68,7 +67,9 @@ Here, we are using the DAG `ckan_api_load_gcp` for uploading a resource to CKAN 
 }
 ```
 
-This will trigger the DAG `ckan_api_load_gcp`.
+Replace `dag_name` with the DAG you want to invoke, for example, `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`. This will trigger the DAG `ckan_api_load_gcp`.
+
+The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the same effect of `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`.
 
 # Tests with Cypress
 Test the aircan-connector with cypress.
