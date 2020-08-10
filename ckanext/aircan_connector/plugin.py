@@ -88,10 +88,11 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     def get_actions(self):
         return {
             'datapusher_submit': action.datapusher_submit,
-            'aircan_submit': action.aircan_submit
+            'aircan_submit': action.aircan_submit,
+            'dag_status': action.dag_status
         }
 
 
     # IBlueprint
-    #def get_blueprint(self):
-    #    return blueprint.aircan
+    def get_blueprint(self):
+       return blueprint.aircan
