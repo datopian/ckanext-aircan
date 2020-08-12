@@ -1,12 +1,9 @@
 # encoding: utf-8
 
-# import google.auth
-# import requests
-# import six.moves.urllib.parse
 import logging
 import json
 import requests
-# from google.auth.transport.requests import Request, AuthorizedSession
+from gcp_handler import GCPHandler
 
 from google.oauth2 import id_token, service_account
 
@@ -16,9 +13,10 @@ IAM_SCOPE = 'https://www.googleapis.com/auth/iam'
 OAUTH_TOKEN_URI = 'https://www.googleapis.com/oauth2/v4/token'
 
 class DagStatusReport:
-    def __init__(self, dag_name, config):
+    def __init__(self, dag_name, execution_date, config):
         self.dag_name = dag_name
         self.config = config
+        self.execution_date = (("/" + str(execution_date)) if execution_date != '' else '')
 
     def get_local_aircan_report(self):
         log.info("Building Airflow local status report")
@@ -34,4 +32,16 @@ class DagStatusReport:
 
     def get_gcp_report(self):
         log.info("Building GCP DAG status report")
-        return {"success": True}
+        gcp = GCPHandler(self.config, {})
+        client_id = gcp.client_setup()
+        webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
+        webserver_url = (
+            'https://'
+            + webserver_id
+            + '.appspot.com/api/experimental/dags/'
+            + self.dag_name
+            + '/dag_runs'
+            + (self.execution_date)
+        )
+        
+        return gcp.make_iap_request(webserver_url, client_id, method='GET')
