@@ -71,6 +71,38 @@ Replace `dag_name` with the DAG you want to invoke, for example, `http://YOUR-CK
 
 The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the same effect of `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`.
 
+## Retrieving a DAG status
+
+After submitting a POST request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`, you should get a respose that contains the `execution date` of the trigegred DAG. For example:
+
+```json
+{
+
+    "help": "http://YOUR-CKAN:5000/api/3/action/help_show?name=aircan_submit",
+    "success": true,
+    "result": {
+        "aircan_status": {
+            "message": "Created <DagRun ckan_api_load_gcp @ 2020-08-12 00:56:59+00:00: manual__2020-08-12T00:56:59+00:00, externally triggered: True>"
+        }
+    }
+}
+```
+
+You can then hit `http://YOUR-CKAN:5000/api/3/action/dag_status?dag_name=ckan_api_load_gcp` for a list of the most recent runs; or alternatively you can specify the execution date (the same you obtain on the reponse after triggering a DAG): `http://YOUR-CKAN:5000/api/3/action/dag_status?dag_name=ckan_api_load_gcp&execution_date=2020-07-09T14:29:54`. Note tou must specify two parameters: `dag_name` and `execution_date`.
+
+Then your reponse (assuming you specify an execution date) should be similar to:
+
+```json
+{
+    "help": "http://ckan:5000/api/3/action/help_show?name=dag_status",
+    "success": true,
+    "result": {
+        "state": "failed"
+    }
+}
+```
+
+
 # Tests with Cypress
 Test the aircan-connector with cypress.
 
