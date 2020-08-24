@@ -53,10 +53,13 @@ class GCPHandler:
     def trigger_dag(self):
         log.info("Trigger DAG on GCP")
         client_id = self.client_setup()
+        log.info("clien_id: {}".format(client_id))
         # This should be part of your webserver's URL:
         # {tenant-project-id}.appspot.com
         webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
-        dag_name = self.config.get('ckan.airflow.cloud.dag_name')
+        log.info("webserver_id: {}".format(webserver_id))
+        dag_name = self.config.get('ckan.airflow.cloud.dagname')
+        log.info("dag_name: {}".format(dag_name))
         webserver_url = (
             'https://'
             + webserver_id
@@ -64,6 +67,7 @@ class GCPHandler:
             + dag_name
             + '/dag_runs'
         )
+        log.info("webserver_url: {}".format(webserver_url))
         # Make a POST request to IAP which then Triggers the DAG
         return self.make_iap_request(webserver_url, client_id, method='POST', json=self.payload)
 
