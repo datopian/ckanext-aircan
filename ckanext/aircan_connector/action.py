@@ -17,6 +17,9 @@ AIRCAN_RESPONSE_AFTER_SUBMIT = None
 
 log = logging.getLogger(__name__)
 
+NO_SCHEMA_ERROR_MESSAGE = "This resource has no schema so cannot be imported into the DataStore."\
+                        " Please add a Table Schema in the resource schema attribute."\
+                        " See `Airflow instance on Google Composer` section in AirCan docs [https://github.com/datopian/ckanext-aircan#airflow-instance-on-google-composer] for more."
 
 def datapusher_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
@@ -66,6 +69,8 @@ def datapusher_submit(context, data_dict):
         '''
 
         table_schema = ckan_resource.get('schema')
+        if not table_schema:
+            raise ValueError(NO_SCHEMA_ERROR_MESSAGE)
         schema = json.dumps(table_schema)
 
         payload = { 
@@ -110,6 +115,9 @@ def datapusher_submit(context, data_dict):
             config['ckan.airflow.cloud.dag_name'] = dag_name
             gcp_response = invoke_gcp(config, payload)
             AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
+    except ValueError:
+        log.error(NO_SCHEMA_ERROR_MESSAGE)
+        raise
     except Exception as e:
         return {"success": False, "errors": [e]}
 
