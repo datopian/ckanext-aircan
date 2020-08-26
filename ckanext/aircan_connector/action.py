@@ -11,11 +11,15 @@ import urlparse
 from ckan.common import request
 from gcp_handler import GCPHandler
 from dag_status_report import DagStatusReport
+import ckan.logic as logic
 
 REACHED_RESOPONSE  = False
 AIRCAN_RESPONSE_AFTER_SUBMIT = None
 
 log = logging.getLogger(__name__)
+
+ValidationError = logic.ValidationError
+NotFound = logic.NotFound
 
 NO_SCHEMA_ERROR_MESSAGE = "This resource has no schema so cannot be imported into the DataStore."\
                         " Please add a Table Schema in the resource schema attribute."\
@@ -69,8 +73,8 @@ def datapusher_submit(context, data_dict):
         '''
 
         table_schema = ckan_resource.get('schema')
-        if not table_schema:
-            raise ValueError(NO_SCHEMA_ERROR_MESSAGE)
+        if not table_schema:    
+            raise NotFound({'Schema Not Found': NO_SCHEMA_ERROR_MESSAGE})
         schema = json.dumps(table_schema)
 
         payload = { 
@@ -115,7 +119,7 @@ def datapusher_submit(context, data_dict):
             config['ckan.airflow.cloud.dag_name'] = dag_name
             gcp_response = invoke_gcp(config, payload)
             AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
-    except ValueError:
+    except NotFound:
         log.error(NO_SCHEMA_ERROR_MESSAGE)
         raise
     except Exception as e:
