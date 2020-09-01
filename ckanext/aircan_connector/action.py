@@ -116,7 +116,8 @@ def datapusher_submit(context, data_dict):
         else:
             log.info("Invoking Airflow on Google Cloud Composer")
             dag_name = request.params.get('dag_name')
-            config['ckan.airflow.cloud.dag_name'] = dag_name
+            if dag_name:
+                config['ckan.airflow.cloud.dag_name'] = dag_name
             gcp_response = invoke_gcp(config, payload)
             AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
     except NotFound:
