@@ -102,6 +102,10 @@ Then your response (assuming you specify an execution date) should be similar to
 }
 ```
 
+Note: If you are using GCP, make sure to enable the following services for your Composer Project:
+* Cloud Logging API
+* Stackdriver Monitoring API
+
 
 # Tests with Cypress
 Test the aircan-connector with cypress.
