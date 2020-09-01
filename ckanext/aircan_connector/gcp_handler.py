@@ -58,7 +58,7 @@ class GCPHandler:
         # {tenant-project-id}.appspot.com
         webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
         log.info("webserver_id: {}".format(webserver_id))
-        dag_name = self.config.get('ckan.airflow.cloud.dagname')
+        dag_name = self.config.get('ckan.airflow.cloud.dag_name')
         log.info("dag_name: {}".format(dag_name))
         webserver_url = (
             'https://'
