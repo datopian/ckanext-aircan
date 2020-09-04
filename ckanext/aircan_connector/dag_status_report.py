@@ -53,22 +53,10 @@ class DagStatusReport:
 
     def get_gcp_logs_for_dag(self):
         project_id = self.config.get('ckan.airflow.cloud.project_id', "")
-        local_config_str = self.config.get('ckan.airflow.cloud.google_application_credentials')
+        local_config_str = self.config.get('ckan.airflow.cloud.google_application_log_credentials')
         parsed_credentials = json.loads(local_config_str)
-
         credentials = service_account.Credentials.from_service_account_info(parsed_credentials, scopes=['https://www.googleapis.com/auth/cloud-platform'])
-        # client = logging_v2.LoggingServiceV2Client(credentials=credentials)
-        log.info(credentials)
-        client = logging.Client(credentials=credentials)
-        resource_names = [project_id]
-        # parent = client.project_path(project_id)
-        # for element in client.list_logs(parent):
-        #     log.info(type(element))
-        #     log.info(element)
-        for entry in client.list_sinks():
-            log.info(entry)
-
-        
-        # "projects/aircan-test-project/logs/airflow-scheduler" 
-        
-        return {}
+        client = logging.client.Client(project_id, credentials=credentials)
+        entries_filter = "resource.type:cloud_composer_environment AND resource.labels.location:us-east1 AND resource.labels.environment_name:aircan-airflow AND ckan_api_load_gcp"
+        entries = client.list_entries([project_id], filter_=entries_filter)
+        return entries
