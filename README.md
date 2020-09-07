@@ -111,9 +111,12 @@ Note: If you are using GCP, make sure to enable the following services for your 
 * Cloud Logging API
 * Stackdriver Monitoring API
 
-Also, make sure your service account key (which you can creating by accessing the IAM panel -> Service accounts) must have permissions to read logs and objects from buckets.
-
-At this time, we are setting a distinct key on `.env`, namely `CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_LOG_CREDENTIALS`, which has access to the logs.
+Also, make sure your service account key (which you can creating by accessing the IAM panel -> Service accounts) must have permissions to read logs and objects from buckets. Enable the following options for the service account (assuming you'll have a setup with StackDriver and Google Cloud Composer):
+* Composer Administrator
+* Environment and Storage Object Administrator
+* Logging Admin
+* Logs Bucket Writer
+* Private Logs Viewer
 
 
 # Tests with Cypress
