@@ -1,13 +1,16 @@
 # encoding: utf-8
 
-import logging
+import logging as l
 import json
 import requests
 from gcp_handler import GCPHandler
 
 from google.oauth2 import id_token, service_account
+# from google.cloud import logging_v2
+from google.cloud import logging
 
-log = logging.getLogger(__name__)
+
+log = l.getLogger(__name__)
 
 IAM_SCOPE = 'https://www.googleapis.com/auth/iam'
 OAUTH_TOKEN_URI = 'https://www.googleapis.com/oauth2/v4/token'
@@ -28,7 +31,7 @@ class DagStatusReport:
         log.info(response.text)
         response.raise_for_status()
         log.info('Airflow status request completed')
-        return {"success": True, "aircan_dag_status": response.json()}
+        return {"success": True, "airflow_api_dag_status": response.json()}
 
     def get_gcp_report(self):
         log.info("Building GCP DAG status report")
@@ -44,4 +47,16 @@ class DagStatusReport:
             + (self.execution_date)
         )
         
-        return gcp.make_iap_request(webserver_url, client_id, method='GET')
+        airflow_api_status = gcp.make_iap_request(webserver_url, client_id, method='GET')
+
+        return {"success": True, "airflow_api_dag_status": airflow_api_status, "gcp_logs": self.get_gcp_logs_for_dag() }
+
+    def get_gcp_logs_for_dag(self):
+        project_id = self.config.get('ckan.airflow.cloud.project_id', "")
+        local_config_str = self.config.get('ckan.airflow.cloud.google_application_credentials')
+        parsed_credentials = json.loads(local_config_str)
+        credentials = service_account.Credentials.from_service_account_info(parsed_credentials, scopes=['https://www.googleapis.com/auth/cloud-platform'])
+        client = logging.client.Client(project_id, credentials=credentials)
+        entries_filter = "resource.type:cloud_composer_environment AND resource.labels.location:us-east1 AND resource.labels.environment_name:aircan-airflow AND" + self.dag_name
+        entries = client.list_entries([project_id], filter_=entries_filter)
+        return entries

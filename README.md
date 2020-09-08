@@ -78,7 +78,7 @@ CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER
 
 ## Retrieving a DAG status
 
-After submitting a POST request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`, you should get a respose that contains the `execution date` of the trigegred DAG. For example:
+After submitting a POST request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`, you should get a response that contains the `execution date` of the triggered DAG. For example:
 
 ```json
 {
@@ -106,6 +106,17 @@ Then your response (assuming you specify an execution date) should be similar to
     }
 }
 ```
+
+Note: If you are using GCP, make sure to enable the following services for your Composer Project:
+* Cloud Logging API
+* Stackdriver Monitoring API
+
+Also, make sure your service account key (which you can creating by accessing the IAM panel -> Service accounts) must have permissions to read logs and objects from buckets. Enable the following options for the service account (assuming you'll have a setup with StackDriver and Google Cloud Composer):
+* Composer Administrator
+* Environment and Storage Object Administrator
+* Logging Admin
+* Logs Bucket Writer
+* Private Logs Viewer
 
 
 # Tests with Cypress

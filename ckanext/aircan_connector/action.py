@@ -141,7 +141,6 @@ def aircan_submit(context, data_dict):
         return AIRCAN_RESPONSE_AFTER_SUBMIT
 
 def dag_status(context, data_dict):
-    log.info("DAG STATUS")
     dag_name = request.params.get('dag_name')
     execution_date = request.params.get('execution_date', '')
     dag_status_report = DagStatusReport(dag_name, execution_date, config)
