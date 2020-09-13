@@ -1,3 +1,4 @@
 requests_toolbelt==0.9.1
-google-auth==1.18.0
-google-cloud-logging
+google-auth==1.21.1
+requests==2.24.0
+google-cloud-logging==1.15.1
