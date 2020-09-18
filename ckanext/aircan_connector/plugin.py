@@ -67,6 +67,18 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         if not submit:
             return
 
+        resource_hash = resource_dict.get('hash')
+        package_id = resource_dict.get('package_id')
+        pacakge_dict = toolkit.get_action(u'package_show')(
+            context, {
+                u'id': package_id,
+            }
+        )
+        pacakge_name = pacakge_dict.get('name')
+        organization_name = pacakge_dict.get('organization', {}).get('name')
+        log.debug("pacakge_name: {}".format(pacakge_name))
+        log.debug("organization: {}".format(organization_name))
+
         try:
             log.debug(
                 u'Submitting resource with aircan {0}'.format(resource_dict['id']) +
@@ -75,7 +87,10 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
             toolkit.get_action(u'datapusher_submit')(
                 context, {
                     u'resource_id': resource_dict['id'],
-                    u'resource_json': resource_dict
+                    u'resource_json': resource_dict,
+                    u'pacakge_name': pacakge_name,
+                    u'organization_name': organization_name,
+                    u'resource_hash': resource_hash
                 }
             )
         except toolkit.ValidationError as e:
