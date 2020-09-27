@@ -88,6 +88,8 @@ def datapusher_submit(context, data_dict):
         gcs_uri = 'gs://%s/%s/%s/%s' % (giftless_bucket, organization_name, pacakge_name, resource_hash)
         log.debug("gcs_uri: {}".format(gcs_uri))
 
+        bq_table_name = ckan_resource.get('bq_table_name')
+        log.debug("bq_table_name: {}".format(bq_table_name))
         payload = { 
             "conf": {
                 "resource": {
@@ -103,7 +105,8 @@ def datapusher_submit(context, data_dict):
                 "big_query": {
                     "gcs_uri": gcs_uri,
                     "bq_project_id": config.get('ckanext.bigquery.project', 'NA'),
-                    "bq_dataset_id": config.get('ckanext.bigquery.dataset', 'NA')
+                    "bq_dataset_id": config.get('ckanext.bigquery.dataset', 'NA'),
+                    "bq_table_name": bq_table_name
                 },
                 "output_bucket": str(date.today())
             }
