@@ -29,7 +29,6 @@ NO_SCHEMA_ERROR_MESSAGE = 'Resource <a href="{0}">{1}</a> has no schema so canno
 
 def datapusher_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
-    log.info("DATA_DICT: {}".format(data_dict))
     try:
         res_id = data_dict['resource_id']
         user = get_action('user_show')(context, {'id': context['user']})
@@ -81,6 +80,16 @@ def datapusher_submit(context, data_dict):
             raise ValueError()
         schema = json.dumps(table_schema)
 
+        # create giftless resource file uri to be passed to aircan
+        pacakge_name = data_dict['pacakge_name']
+        organization_name = data_dict['organization_name']
+        resource_hash = data_dict['resource_hash']
+        giftless_bucket = config.get('ckan.giftless.bucket', '')
+        gcs_uri = 'gs://%s/%s/%s/%s' % (giftless_bucket, organization_name, pacakge_name, resource_hash)
+        log.debug("gcs_uri: {}".format(gcs_uri))
+
+        bq_table_name = ckan_resource.get('bq_table_name')
+        log.debug("bq_table_name: {}".format(bq_table_name))
         payload = { 
             "conf": {
                 "resource": {
@@ -94,13 +103,15 @@ def datapusher_submit(context, data_dict):
                     "site_url": config.get('ckan.site_url'),    
                 },
                 "big_query": {
+                    "gcs_uri": gcs_uri,
                     "bq_project_id": config.get('ckanext.bigquery.project', 'NA'),
-                    "bq_dataset_id": config.get('ckanext.bigquery.dataset', 'NA')
+                    "bq_dataset_id": config.get('ckanext.bigquery.dataset', 'NA'),
+                    "bq_table_name": bq_table_name
                 },
                 "output_bucket": str(date.today())
             }
         }
-        log.info(payload)
+        log.debug("payload: {}".format(payload))
         global REACHED_RESOPONSE
         REACHED_RESOPONSE = True
         global AIRCAN_RESPONSE_AFTER_SUBMIT 
