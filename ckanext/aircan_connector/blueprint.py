@@ -13,7 +13,7 @@ class ResourceDataView(MethodView):
     def post(self, id, resource_id):
         payload = request.data
         try:
-            toolkit.get_action(u'datapusher_submit')(
+            toolkit.get_action(u'aircan_submit')(
                 None, {
                     u'resource_id': resource_id,
                     u'resource_json': payload

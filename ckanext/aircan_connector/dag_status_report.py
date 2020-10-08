@@ -49,7 +49,7 @@ class DagStatusReport:
         
         airflow_api_status = gcp.make_iap_request(webserver_url, client_id, method='GET')
 
-        return {"success": True, "airflow_api_dag_status": airflow_api_status, "gcp_logs": self.get_gcp_logs_for_dag() }
+        return {"success": True, "airflow_api_dag_status": airflow_api_status, "gcp_logs": {} }
 
     def get_gcp_logs_for_dag(self):
         project_id = self.config.get('ckan.airflow.cloud.project_id', "")

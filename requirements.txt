@@ -3,3 +3,4 @@ grpcio==1.30.0
 google-auth==1.21.1
 requests==2.24.0
 google-cloud-logging==1.15.1
+six>=1.13.0

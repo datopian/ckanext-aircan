@@ -27,17 +27,20 @@ NO_SCHEMA_ERROR_MESSAGE = 'Resource <a href="{0}">{1}</a> has no schema so canno
                         ' See <a href="https://github.com/datopian/ckanext-aircan#airflow-instance-on-google-composer"> Airflow instance on Google Composer </a>' \
                         ' section in AirCan docs for more.'
 
-def datapusher_submit(context, data_dict):
+
+def aircan_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
     try:
         res_id = data_dict['resource_id']
+        
         user = get_action('user_show')(context, {'id': context['user']})
         ckan_api_key = user['apikey']
         
         ckan_resource = data_dict.get('resource_json', {})
-        
         ckan_resource_url = config.get('ckan.site_url') + '/dataset/' + ckan_resource.get('package_id') + '/resource/' + res_id
         ckan_resource_name = ckan_resource.get('name')
+
+
         '''Sample schema structure we are expecting to receive frfom ckan_resource.get('schema')
             schema = {
                 "fields": [
@@ -141,6 +144,8 @@ def datapusher_submit(context, data_dict):
     except Exception as e:
         return {"success": False, "errors": [e]}
 
+    if REACHED_RESOPONSE == True:
+        return AIRCAN_RESPONSE_AFTER_SUBMIT
 
 def invoke_gcp(config, payload):
     log.info('Invoking GCP')
@@ -148,12 +153,6 @@ def invoke_gcp(config, payload):
     log.info('Handler created')
     return gcp.trigger_dag()
 
-
-def aircan_submit(context, data_dict):
-    log.info("Aircan submit action")
-    resource = get_action('resource_create')(context, data_dict)
-    if REACHED_RESOPONSE == True:
-        return AIRCAN_RESPONSE_AFTER_SUBMIT
 
 def dag_status(context, data_dict):
     dag_name = request.params.get('dag_name')
