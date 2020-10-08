@@ -46,14 +46,13 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
                 u'id': resource.id,
             }
         )
-        self._submit_to_datapusher(resource_dict)
+        self._submit_to_aircan(resource_dict)
 
     # IResourceController
     def after_create(self, context, resource_dict):
+        self._submit_to_aircan(resource_dict)
 
-        self._submit_to_datapusher(resource_dict)
-
-    def _submit_to_datapusher(self, resource_dict):
+    def _submit_to_aircan(self, resource_dict):
         context = {
             u'model': model,
             u'ignore_auth': True,
@@ -84,7 +83,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
                 u'Submitting resource with aircan {0}'.format(resource_dict['id']) +
                 u' to DataStore'
             )
-            toolkit.get_action(u'datapusher_submit')(
+            toolkit.get_action(u'aircan_submit')(
                 context, {
                     u'resource_id': resource_dict['id'],
                     u'resource_json': resource_dict,
@@ -102,7 +101,6 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     # IActions
     def get_actions(self):
         return {
-            'datapusher_submit': action.datapusher_submit,
             'aircan_submit': action.aircan_submit,
             'dag_status': action.dag_status
         }
