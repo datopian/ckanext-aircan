@@ -1,12 +1,12 @@
 ## ckanext-aircan
 
-The custom extension for notifying(triggering) the Airflow DAG about the data to be uploaded to DataStore.
+A CKAN extension for integrating AirCan into CKAN for notifying(triggering) the Airflow DAG about the data to be uploaded to DataStore.
+
+TODO Clarify this readme file
 
 ### Prerequisites
 
 You have a CKAN instance up and running - [instructions](https://github.com/okfn/docker-ckan#development-mode).
-
-Check [Aircan](https://github.com/datopian/aircan) for more informaiton.
 
 ### Installation
 1. This extension need to be installed manually via cloning the desired commit into the docker-ckan/src directory:
