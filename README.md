@@ -1,48 +1,52 @@
-## ckanext-aircan
+# ckanext-aircan
 
-A CKAN extension for integrating AirCan into CKAN for notifying(triggering) the Airflow DAG about the data to be uploaded to DataStore.
+A CKAN extension for integrating the [AirFlow-based AirCan Data Factory into CKAN][aircan]. Specifically, this extension provides:
 
-TODO Clarify this readme file
+[aircan]: https://tech.datopian.com/flows/#ckan-v3
 
-### Prerequisites
+* New APIs in CKAN for triggering and monitoring workflows (DAGs) in AirFlow
+* Hooking key events in CKAN into the AirFlow instance. Specifically, resource creation and update trigger DAGs in AirFlow to load resource data into the DataStore. See https://tech.datopian.com/load/#ckan-v3
 
-You have a CKAN instance up and running - [instructions](https://github.com/okfn/docker-ckan#development-mode).
+## Installation
 
-### Installation
-1. This extension need to be installed manually via cloning the desired commit into the docker-ckan/src directory:
-`git@github.com:datopian/ckanext-aircan.git`
+### Basic Setup
 
-2. Enable the extension in CKAN by adding in your`.env` file an `aircan_connector` to `CKAN__PLUGINS` list. Make sure to disable `datapusher` in case you have it.
+There are two potential cases:
+
+* Docker for Deployment: Install this extension in the usual way, see https://tech.datopian.com/ckan/install-extension.html
+* Local Development Install manually via cloning the desired commit into the docker-ckan/src directory: `git@github.com:datopian/ckanext-aircan.git`
+
+### Configuration
+
+* Enable the extension in CKAN by adding the plugin `aircan_connector` to `CKAN__PLUGINS` list in your`.env`. Make sure to disable `datapusher` and `xloader` if you have them there as AirCan replaces them.
+* Add details of the AirFlow instance -- details below for Local case and Cloud case
 
 ### Local Airflow instance
  
 * In your`.env` file add  `CKAN__AIRFLOW__URL` according to [Apache AirFlow REST API Reference](https://airflow.apache.org/docs/stable/rest-api-ref#post--api-experimental-dags--DAG_ID--dag_runs). If you are running CKAN in a Docker container, make sure to specify the Airflow URL with `host.docker.internal` instead of `localhost`: `CKAN__AIRFLOW__URL=http://host.docker.internal:8080/api/experimental/dags/ckan_api_load_multiple_steps/dag_runs`. Also notice Airflow requires, by default, the endpoint `api/experimental/dags/DAG_ID` for API access.
-
 * Also in your `.env` file, specify a temporary directory for files: `CKAN__AIRFLOW__STORAGE_PATH=/tmp/` and `CKAN__AIRFLOW__CLOUD=local`. 
-
-* Access your CKAN and upload of modify a resource. You must select a resource type. At this time, we support `CSV` only. 
-
 
 ### Airflow instance on Google Composer
 
 Assuming you already have a Google Cloud Composer properly set up, it is possible to trigger a DAG on GoogleCloud Platform following these steps:
 
-1. Download your credentials file (a JSON file) from Google Cloud Platform. Convert it to a single-line JSON.
+* Download your credentials file (a JSON file) from Google Cloud Platform. Convert it to a single-line JSON.
+* Set up the following environment variables on your `.env` file:
 
-2. Set up the following environment variables on your `.env` file:
+  ```bash
+  CKAN__AIRFLOW__CLOUD=GCP # this line activates the integration with GCP
+  CKAN__AIRFLOW__CLOUD__PROJECT_ID=YOUR_PROJECT_ID_ON_COMPOSER
+  CKAN__AIRFLOW__CLOUD__LOCATION=us-east1_OR_OTHER
+  CKAN__AIRFLOW__CLOUD__COMPOSER_ENVIRONMENT=NAME_OF_COMPOSER_ENVIRONMENT
+  CKAN__AIRFLOW__CLOUD__WEB_UI_ID=ID_FROM_AIRFLOW_UI_ON_COMPOSER
+  CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_CREDENTIALS={ YOUR SINGLE LINE CREDENTIALS JSON FILE }
+  ``` 
 
-```bash
-CKAN__AIRFLOW__CLOUD=GCP # this line activates the integration with GCP
-CKAN__AIRFLOW__CLOUD__PROJECT_ID=YOUR_PROJECT_ID_ON_COMPOSER
-CKAN__AIRFLOW__CLOUD__LOCATION=us-east1_OR_OTHER
-CKAN__AIRFLOW__CLOUD__COMPOSER_ENVIRONMENT=NAME_OF_COMPOSER_ENVIRONMENT
-CKAN__AIRFLOW__CLOUD__WEB_UI_ID=ID_FROM_AIRFLOW_UI_ON_COMPOSER
-CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_CREDENTIALS={ YOUR SINGLE LINE CREDENTIALS JSON FILE }
-``` 
+## Getting Started
 
-Here, we are using the DAG `ckan_api_load_gcp` for uploading a resource to CKAN using an Airflow instance on Google Cloud.
+### Triggering a Workflow (DAG)
 
-3. Make a request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`, specifying your `CKAN_API_KEY` on the header and send the following information on the body of the request, replacing the values accordingly:
+Make a request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`, specifying your `CKAN_API_KEY` on the header and send the following information on the body of the request, replacing the values accordingly:
 
 ```json
 {
@@ -68,6 +72,8 @@ Here, we are using the DAG `ckan_api_load_gcp` for uploading a resource to CKAN 
 
 Replace `dag_name` with the DAG you want to invoke, for example, `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`. This will trigger the DAG `ckan_api_load_gcp`.
 
+NB: the DAG `ckan_api_load_gcp` is designed for Google Cloud Composer AirFlow instance and will load a resource into the DataStore.
+
 The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the same effect of `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`. Make sure you set up an extra variable on your `.env` file specifying the DAG you want to trigger:
 
 ```
@@ -76,7 +82,7 @@ The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the s
 CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER
 ```
 
-## Retrieving a DAG status
+### Retrieving a Workflow (DAG) status
 
 After submitting a POST request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`, you should get a response that contains the `execution date` of the triggered DAG. For example:
 
@@ -107,30 +113,16 @@ Then your response (assuming you specify an execution date) should be similar to
 }
 ```
 
-Note: If you are using GCP, make sure to enable the following services for your Composer Project:
-* Cloud Logging API
-* Stackdriver Monitoring API
-
-Also, make sure your service account key (which you can creating by accessing the IAM panel -> Service accounts) must have permissions to read logs and objects from buckets. Enable the following options for the service account (assuming you'll have a setup with StackDriver and Google Cloud Composer):
-* Composer Administrator
-* Environment and Storage Object Administrator
-* Logging Admin
-* Logs Bucket Writer
-* Private Logs Viewer
-
-
 # Tests with Cypress
+
 Test the aircan-connector with cypress.
 
 ## Installation
 
 `npm install`
 
-
 ## Running
 
 Opens up the cypress app and you can choose the specs to run.
 
 `npm test`
-
-
