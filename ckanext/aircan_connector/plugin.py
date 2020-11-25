@@ -102,7 +102,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     def get_actions(self):
         return {
             'aircan_submit': action.aircan_submit,
-            'dag_status': action.dag_status
+            'aircan_status': action.dag_status
         }
 
 

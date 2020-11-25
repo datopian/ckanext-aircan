@@ -99,13 +99,13 @@ After submitting a POST request to `http://YOUR-CKAN:5000/api/3/action/aircan_su
 }
 ```
 
-You can then hit `http://YOUR-CKAN:5000/api/3/action/dag_status?dag_name=ckan_api_load_gcp` for a list of the most recent runs; or alternatively you can specify the execution date (the same you obtain on the response after triggering a DAG): `http://YOUR-CKAN:5000/api/3/action/dag_status?dag_name=ckan_api_load_gcp&execution_date=2020-07-09T14:29:54`. Note you must specify two parameters: `dag_name` and `execution_date`.
+You can then hit `http://YOUR-CKAN:5000/api/3/action/aircan_status?dag_name=ckan_api_load_gcp` for a list of the most recent runs; or alternatively you can specify the execution date (the same you obtain on the response after triggering a DAG): `http://YOUR-CKAN:5000/api/3/action/aircan_status?dag_name=ckan_api_load_gcp&execution_date=2020-07-09T14:29:54`. Note you must specify two parameters: `dag_name` and `execution_date`.
 
 Then your response (assuming you specify an execution date) should be similar to:
 
 ```json
 {
-    "help": "http://ckan:5000/api/3/action/help_show?name=dag_status",
+    "help": "http://ckan:5000/api/3/action/help_show?name=aircan_status",
     "success": true,
     "result": {
         "state": "failed"

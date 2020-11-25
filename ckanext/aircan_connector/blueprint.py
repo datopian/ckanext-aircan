@@ -31,7 +31,7 @@ class DagStatusView(MethodView):
         try:
             payload = request.data
             log.info(payload)
-            toolkit.get_action(u'dag_status')(
+            toolkit.get_action(u'aircan_status')(
                 None, {
                     u'dag_id': dag_id,
                     u'airflow_process_status': payload
@@ -41,6 +41,7 @@ class DagStatusView(MethodView):
             pass
 
         return core_helpers.redirect_to(
+            # WARNING Should here also be changed from dat_status to aircan_status ??
             u'datapusher.dag_status', id=id, dag_id=dag_id
         )
 
@@ -52,6 +53,6 @@ aircan.add_url_rule(
 
 
 aircan.add_url_rule(
-    u'/dag_status/<dag_id>',
-    view_func=DagStatusView.as_view(str(u'dag_status'))
+    u'/aircan_status/<dag_id>',
+    view_func=DagStatusView.as_view(str(u'aircan_status'))
 )
