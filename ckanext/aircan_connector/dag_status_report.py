@@ -31,7 +31,7 @@ class DagStatusReport:
         log.info(response.text)
         response.raise_for_status()
         log.info('Airflow status request completed')
-        return {"success": True, "airflow_api_dag_status": response.json()}
+        return {"success": True, "airflow_api_aircan_status": response.json()}
 
     def get_gcp_report(self):
         log.info("Building GCP DAG status report")
@@ -49,7 +49,7 @@ class DagStatusReport:
         
         airflow_api_status = gcp.make_iap_request(webserver_url, client_id, method='GET')
 
-        return {"success": True, "airflow_api_dag_status": airflow_api_status, "gcp_logs": {} }
+        return {"success": True, "airflow_api_aircan_status": airflow_api_status, "gcp_logs": {} }
 
     def get_gcp_logs_for_dag(self):
         project_id = self.config.get('ckan.airflow.cloud.project_id', "")
