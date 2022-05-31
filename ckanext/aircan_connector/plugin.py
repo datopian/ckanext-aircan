@@ -5,7 +5,7 @@ import ckan.plugins as p
 import ckan.plugins.toolkit as toolkit
 import ckan.model as model
 from ckanext.aircan_connector import  blueprint
-from ckanext.aircan_connector import action
+from ckanext.aircan_connector.logic import action, auth
 log = logging.getLogger(__name__)
 
 
@@ -24,6 +24,7 @@ DEFAULT_FORMATS = [
 class Aircan_ConnectorPlugin(p.SingletonPlugin):
     p.implements(p.IConfigurer, inherit=True)
     p.implements(p.IResourceUrlChange)
+    p.implements(p.IAuthFunctions)
     #p.implements(p.IBlueprint)
     p.implements(p.IActions)
     p.implements(p.IResourceController, inherit=True)
@@ -109,3 +110,10 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     # IBlueprint
     def get_blueprint(self):
        return blueprint.aircan
+
+    # IAuthFunctions
+    def get_auth_functions(self):
+        return {
+            'aircan_submit': auth.aircan_submit,
+            'aircan_status': auth.aircan_status
+        }

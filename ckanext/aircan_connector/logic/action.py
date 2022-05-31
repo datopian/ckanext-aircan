@@ -3,7 +3,7 @@ import os
 import requests
 from datetime import date
 from ckan.common import config
-from ckan.plugins.toolkit import get_action
+from ckan.plugins.toolkit import get_action, check_access
 import logging
 import json
 import time
@@ -30,9 +30,9 @@ NO_SCHEMA_ERROR_MESSAGE = 'Resource <a href="{0}">{1}</a> has no schema so canno
 
 def aircan_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
+    check_access('aircan_submit', context, data_dict)
     try:
-        res_id = data_dict['resource_id']
-        
+        res_id = data_dict['resource_id']        
         user = get_action('user_show')(context, {'id': context['user']})
         ckan_api_key = user['apikey']
         
@@ -155,6 +155,8 @@ def invoke_gcp(config, payload):
 
 
 def dag_status(context, data_dict):
+    log.info(context)
+    check_access('aircan_status', context, data_dict)
     dag_name = request.params.get('dag_name')
     execution_date = request.params.get('execution_date', '')
     dag_status_report = DagStatusReport(dag_name, execution_date, config)
