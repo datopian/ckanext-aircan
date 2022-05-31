@@ -19,7 +19,7 @@ class DagStatusReport:
     def __init__(self, dag_name, execution_date, config):
         self.dag_name = dag_name
         self.config = config
-        self.execution_date = (("/" + str(execution_date)) if execution_date != '' else '')
+        self.execution_date = ((str(execution_date)) if execution_date != '' else '')
 
     def get_local_aircan_report(self):
         log.info("Building Airflow local status report")
@@ -33,22 +33,22 @@ class DagStatusReport:
         log.info('Airflow status request completed')
         return {"success": True, "airflow_api_aircan_status": response.json()}
 
+
     def get_gcp_report(self):
-        log.info("Building GCP DAG status report")
         gcp = GCPHandler(self.config, {})
-        client_id = gcp.client_setup()
+        log.info("Trigger DAG - {} on GCP".format(self.dag_name))
         webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
         webserver_url = (
             'https://'
             + webserver_id
-            + '.appspot.com/api/experimental/dags/'
+            + '.composer.googleusercontent.com/api/v1/dags/'
             + self.dag_name
-            + '/dag_runs'
-            + (self.execution_date)
+            + '/dagRuns'
+            + '?execution_date_gte=' + (self.execution_date)
         )
-        
-        airflow_api_status = gcp.make_iap_request(webserver_url, client_id, method='GET')
-
+        log.info("The Webserver Url: {}".format(webserver_url))
+        # Make a POST request to IAP which then Triggers the DAG
+        airflow_api_status = gcp.make_iap_request(webserver_url, method='GET')
         return {"success": True, "airflow_api_aircan_status": airflow_api_status, "gcp_logs": {} }
 
     def get_gcp_logs_for_dag(self):
