@@ -24,6 +24,8 @@ There are two potential cases:
 ### Local Airflow instance
  
 * In your`.env` file add  `CKAN__AIRFLOW__URL` according to [Apache AirFlow REST API Reference](https://airflow.apache.org/docs/stable/rest-api-ref#post--api-experimental-dags--DAG_ID--dag_runs). If you are running CKAN in a Docker container, make sure to specify the Airflow URL with `host.docker.internal` instead of `localhost`: `CKAN__AIRFLOW__URL=http://host.docker.internal:8080/api/experimental/dags/ckan_api_load_multiple_steps/dag_runs`. Also notice Airflow requires, by default, the endpoint `api/experimental/dags/DAG_ID` for API access.
+* Add Airflow admin username and password for authorization:
+  `CKAN__AIRFLOW__USERNAME=airflow_amin_username` and `CKAN__AIRFLOW__PASSWORD=airflow_admin_password`
 * Also in your `.env` file, specify a temporary directory for files: `CKAN__AIRFLOW__STORAGE_PATH=/tmp/` and `CKAN__AIRFLOW__CLOUD=local`. 
 
 ### Airflow instance on Google Composer

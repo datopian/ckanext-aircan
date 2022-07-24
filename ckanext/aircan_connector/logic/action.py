@@ -123,6 +123,9 @@ def aircan_submit(context, data_dict):
             ckan_airflow_endpoint_url = config.get('ckan.airflow.url')
             log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
             response = requests.post(ckan_airflow_endpoint_url,
+                                     auth=requests.auth.HTTPBasicAuth( 
+                                        config['ckan.airflow.username'], 
+                                        config['ckan.airflow.password']),
                                      data=json.dumps(payload),
                                      headers={'Content-Type': 'application/json',
                                               'Cache-Control': 'no-cache'})

@@ -26,6 +26,9 @@ class DagStatusReport:
         ckan_airflow_endpoint_url = self.config.get('ckan.airflow.url')
         log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
         response = requests.get(ckan_airflow_endpoint_url,
+                                auth=requests.auth.HTTPBasicAuth(
+                                        self.config['ckan.airflow.username'], 
+                                        self.config['ckan.airflow.password']),
                                  headers={'Content-Type': 'application/json',
                                           'Cache-Control': 'no-cache'})
         log.info(response.text)
