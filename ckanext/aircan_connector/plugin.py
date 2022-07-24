@@ -25,7 +25,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     p.implements(p.IConfigurer, inherit=True)
     p.implements(p.IResourceUrlChange)
     p.implements(p.IAuthFunctions)
-    #p.implements(p.IBlueprint)
+    p.implements(p.IBlueprint)
     p.implements(p.IActions)
     p.implements(p.IResourceController, inherit=True)
 

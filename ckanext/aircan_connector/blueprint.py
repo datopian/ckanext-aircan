@@ -1,58 +1,80 @@
 from flask import Blueprint
-from flask.views import MethodView
 import ckan.plugins.toolkit as toolkit
+from flask.views import MethodView
+import ckan.model as model
 import ckan.logic as logic
-import ckan.lib.helpers as core_helpers
-from ckan.common import request
 
 
 aircan = Blueprint(u'aircan', __name__)
 
-class ResourceDataView(MethodView):
+class ResourceDataController(MethodView):
+    def _prepare(self, id, resource_id):
+        context = {
+            'model': model,
+            'session': model.Session,
+            'user': toolkit.g.user,
+            'auth_user_obj': toolkit.g.userobj
+        }
+        return context
+
 
     def post(self, id, resource_id):
-        payload = request.data
+        context = self._prepare(id,resource_id)
+
         try:
-            toolkit.get_action(u'aircan_submit')(
-                None, {
-                    u'resource_id': resource_id,
-                    u'resource_json': payload
-                }
-            )
+            pacakge_dict = toolkit.get_action(u'package_show')(
+                context, {
+                    u'id': id,
+                })
+                
+            resource_dict = toolkit.get_action(u'resource_show')(
+                context, {
+                    'id': resource_id,
+                })
+            toolkit.get_action(u'aircan_submit')(context, {
+                    u'resource_id': resource_dict['id'],
+                    u'resource_json': resource_dict,
+                    u'pacakge_name': pacakge_dict.get('name'),
+                    u'organization_name': pacakge_dict.get('organization', {}).get('name'),
+                    u'resource_hash': resource_dict.get('hash')
+                    })
         except logic.ValidationError:
             pass
 
-        return core_helpers.redirect_to(
-            u'datapusher.resource_data', id=id, resource_id=resource_id
+        return toolkit.h.redirect_to(
+            controller='aircan',
+            action='resource_data',
+            id=id,
+            resource_id=resource_id
         )
-
-class DagStatusView(MethodView):
-    def post(self, id, dag_id):
+        
+    def get(self, id, resource_id):
+        context = self._prepare(id, resource_id)
         try:
-            payload = request.data
-            log.info(payload)
-            toolkit.get_action(u'aircan_status')(
-                None, {
-                    u'dag_id': dag_id,
-                    u'airflow_process_status': payload
-                }
+            toolkit.c.pkg_dict = toolkit.get_action('package_show')(
+                context, {'id': id}
             )
-        except logic.ValidationError:
-            pass
+            toolkit.c.resource = toolkit.get_action('resource_show')(
+                context, {'id': resource_id}
+            )
+        except (logic.NotFound, logic.NotAuthorized):
+            toolkit.abort(404, toolkit._('Resource not found'))
 
-        return core_helpers.redirect_to(
-            # WARNING Should here also be changed from dat_status to aircan_status ??
-            u'datapusher.dag_status', id=id, dag_id=dag_id
-        )
+        try:
+            aircan_status = toolkit.get_action('aircan_status')(
+                context, {'resource_id': resource_id}
+            )
+        except logic.NotFound:
+            aircan_status = {}
+        except logic.NotAuthorized:
+            toolkit.abort(403, toolkit._('Not authorized to see this page'))
 
+        return toolkit.render('resource_data.html',
+                        extra_vars={'status': aircan_status})
+
+       
 
 aircan.add_url_rule(
     u'/dataset/<id>/resource_data/<resource_id>',
-    view_func=ResourceDataView.as_view(str(u'resource_data'))
-)
-
-
-aircan.add_url_rule(
-    u'/aircan_status/<dag_id>',
-    view_func=DagStatusView.as_view(str(u'aircan_status'))
+    view_func=ResourceDataController.as_view(str(u'resource_data'))
 )
