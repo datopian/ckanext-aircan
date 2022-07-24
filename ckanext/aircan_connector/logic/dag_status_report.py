@@ -16,16 +16,16 @@ IAM_SCOPE = 'https://www.googleapis.com/auth/iam'
 OAUTH_TOKEN_URI = 'https://www.googleapis.com/oauth2/v4/token'
 
 class DagStatusReport:
-    def __init__(self, dag_name, execution_date, config):
+    def __init__(self, dag_name, dag_run_id, config):
         self.dag_name = dag_name
         self.config = config
-        self.execution_date = ((str(execution_date)) if execution_date != '' else '')
+        self.dag_run_id = dag_run_id
 
     def get_local_aircan_report(self):
         log.info("Building Airflow local status report")
         ckan_airflow_endpoint_url = self.config.get('ckan.airflow.url')
-        log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
-        response = requests.get(ckan_airflow_endpoint_url,
+        log.info("Airflow Endpoint URL: {0}/{1}".format(ckan_airflow_endpoint_url, self.dag_run_id))
+        response = requests.get('{0}/{1}'.format(ckan_airflow_endpoint_url, self.dag_run_id),
                                 auth=requests.auth.HTTPBasicAuth(
                                         self.config['ckan.airflow.username'], 
                                         self.config['ckan.airflow.password']),
@@ -46,8 +46,8 @@ class DagStatusReport:
             + webserver_id
             + '.composer.googleusercontent.com/api/v1/dags/'
             + self.dag_name
-            + '/dagRuns'
-            + '?execution_date_gte=' + (self.execution_date)
+            + '/dagRuns/'
+            + self.dag_run_id
         )
         log.info("The Webserver Url: {}".format(webserver_url))
         # Make a POST request to IAP which then Triggers the DAG
