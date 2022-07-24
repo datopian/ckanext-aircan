@@ -84,34 +84,28 @@ The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the s
 CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER
 ```
 
-### Retrieving a Workflow (DAG) status
-
-After submitting a POST request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`, you should get a response that contains the `execution date` of the triggered DAG. For example:
-
+### Update aircan run status
+ The `aircan_status_update` API can be use to store or update the run status for given resource. It accepts the POST request with authorized user.
 ```json
-{
-
-    "help": "http://YOUR-CKAN:5000/api/3/action/help_show?name=aircan_submit",
-    "success": true,
-    "result": {
-        "aircan_status": {
-            "message": "Created <DagRun ckan_api_load_gcp @ 2020-08-12 00:56:59+00:00: manual__2020-08-12T00:56:59+00:00, externally triggered: True>"
-        }
+{ 
+    "resource_id": "a4a520aa-c790-4b53-93aa-de61e1a2813c",
+    "state": "progress",
+    "message":"Pusing dataset records.",
+    "dag_run_id":"394a1f0f-d8b3-47f2-9a51-08732349b785",
+    "error": {
+        "message" : "Failed to push data records."
     }
 }
 ```
 
-You can then hit `http://YOUR-CKAN:5000/api/3/action/aircan_status?dag_name=ckan_api_load_gcp` for a list of the most recent runs; or alternatively you can specify the execution date (the same you obtain on the response after triggering a DAG): `http://YOUR-CKAN:5000/api/3/action/aircan_status?dag_name=ckan_api_load_gcp&execution_date=2020-07-09T14:29:54`. Note you must specify two parameters: `dag_name` and `execution_date`.
-
-Then your response (assuming you specify an execution date) should be similar to:
+### Retrieving aircan run status 
+ Use `aircan_status` API to get aircan run status for given resource providing resource id.
+ eg.
+  `http://YOUR-CKAN:5000/api/3/action/aircan_status`
 
 ```json
 {
-    "help": "http://ckan:5000/api/3/action/help_show?name=aircan_status",
-    "success": true,
-    "result": {
-        "state": "failed"
-    }
+  "resource_id": "a4a520aa-c790-4b53-93aa-de61e1a2813c"
 }
 ```
 
