@@ -78,11 +78,9 @@ def aircan_submit(context, data_dict):
         }
         '''
 
-        table_schema = ckan_resource.get('schema')
-        if not table_schema:    
-            raise ValueError()
+        table_schema = ckan_resource.get('schema', {})
         schema = json.dumps(table_schema)
-
+   
         # create giftless resource file uri to be passed to aircan
         pacakge_name = data_dict['pacakge_name']
         organization_name = data_dict['organization_name']
