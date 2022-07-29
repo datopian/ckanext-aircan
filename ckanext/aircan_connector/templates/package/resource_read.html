@@ -1,0 +1,12 @@
+{% ckan_extends %}
+
+{% block resource_inner %}
+    {% if h.aircan_status(res.id)['status'] in 'progress'  %}
+    <div class="container">
+        <div class="alert alert-warning">
+            <strong>Dataset updating!</strong> new data is arriving.
+        </div>
+    </div>
+    {% endif %}
+    {{super()}}
+{% endblock %}

@@ -6,7 +6,7 @@ import ckan.plugins.toolkit as toolkit
 import ckan.model as model
 from ckanext.aircan_connector import  blueprint
 from ckanext.aircan_connector.logic import action, auth
-from ckanext.aircan_connector import helpers
+from ckanext.aircan_connector.logic import helpers
 log = logging.getLogger(__name__)
 
 
