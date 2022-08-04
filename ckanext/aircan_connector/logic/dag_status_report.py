@@ -31,7 +31,7 @@ class DagStatusReport:
                                         self.config['ckan.airflow.password']),
                                  headers={'Content-Type': 'application/json',
                                           'Cache-Control': 'no-cache'})
-        log.info(response.text)
+        log.debug(response.text)
         response.raise_for_status()
         log.info('Airflow status request completed')
         return {"success": True, "airflow_api_aircan_status": response.json()}
