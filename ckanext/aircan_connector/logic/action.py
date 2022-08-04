@@ -102,7 +102,9 @@ def aircan_submit(context, data_dict):
                     "path": ckan_resource.get('url'),
                     "format": ckan_resource.get('format'),
                     "ckan_resource_id": res_id,
-                    "schema": schema
+                    "schema": schema,
+                    "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
+                    "datastore_unique_keys": ckan_resource.get('datastore_unique_keys', False)
                 },
                 "ckan_config": {
                     "api_key": ckan_api_key,
