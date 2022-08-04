@@ -11,6 +11,7 @@ boolean_validator = toolkit.get_validator('boolean_validator')
 
 class ResourceDataController(MethodView):
     def _prepare(self, id, resource_id):
+
         context = {
             'model': model,
             'session': model.Session,

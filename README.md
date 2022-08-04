@@ -84,6 +84,9 @@ The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the s
 CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER
 ```
 
+For ckan datastore loader dag you can enable the upload configuration.
+CKAN__AIRCAN__DATASTORE_APPEND_OR_UPDATE_DATA_=True
+
 ### Update aircan run status
  The `aircan_status_update` API can be use to store or update the run status for given resource. It accepts the POST request with authorized user.
 ```json

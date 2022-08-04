@@ -39,8 +39,7 @@
       {% endif %}
     </tr>
   </table>
-
-  {%if res.url_type == 'upload'%}
+  {% if res.url_type == 'upload'and h.datastore_append_or_update() %}
     <div class="aircan-configuration">
       <h2>Upload Configuration</h2>
       <form method="post" action="{{ upload_config }}" data-module="aircan-js">

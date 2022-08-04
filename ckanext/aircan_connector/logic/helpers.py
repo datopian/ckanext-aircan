@@ -1,6 +1,7 @@
 import logging
 import ckan.plugins.toolkit as toolkit
 
+boolean_validator = toolkit.get_validator('boolean_validator')
 
 log = logging.getLogger(__name__)
 
@@ -12,3 +13,7 @@ def aircan_status(resource_id):
         return {
             'status': 'unknown'
         }
+
+def datastore_append_or_update():
+    active = toolkit.config.get('ckan.aircan.datastore_append_or_update_data', False)
+    return boolean_validator(active, {})
