@@ -103,7 +103,7 @@ class ResourceUploadConfigController(MethodView):
             
             datastore_dict = {
                 'resource_id': resource_id,
-                'primary_key': datastore_unique_keys,
+                'primary_key': datastore_unique_keys or [],
                 'force': True,
                 }
 
