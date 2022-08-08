@@ -103,6 +103,7 @@ def aircan_submit(context, data_dict):
                     "format": ckan_resource.get('format'),
                     "ckan_resource_id": res_id,
                     "schema": schema,
+                    "package_id": ckan_resource.get('package_id'),
                     "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
                     "datastore_unique_keys": ckan_resource.get('datastore_unique_keys', False)
                 },
@@ -119,21 +120,22 @@ def aircan_submit(context, data_dict):
                 "output_bucket": str(date.today())
             }
         }
-
-
-        aircan_status =  get_action(u'aircan_status')(context, 
-                {'resource_id': ckan_resource['id']})
-        updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
-        time_since_last_updated = datetime.datetime.utcnow() - updated
-        wait_till = datetime.timedelta(minutes=int(10))
-        # wait for the next 10 minutes if already submitted.
-        if aircan_status.get('status', '') in ['pending', 'progress'] and  \
-                time_since_last_updated < wait_till:
-            status_msg = 'A pending task was found {0} for this resource, so \
-                            skipping this duplicate task'.format(ckan_resource['id'])
-            log.info(status_msg)
-            h.flash_error(status_msg)
-            return False
+        try:
+            aircan_status =  get_action(u'aircan_status')(context, 
+                    {'resource_id': ckan_resource['id']})
+            updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
+            time_since_last_updated = datetime.datetime.utcnow() - updated
+            wait_till = datetime.timedelta(minutes=int(10))
+            # wait for the next 10 minutes if already submitted.
+            if aircan_status.get('status', '') in ['pending', 'progress'] and  \
+                    time_since_last_updated < wait_till:
+                status_msg = 'A pending task was found {0} for this resource, so \
+                                skipping this duplicate task'.format(ckan_resource['id'])
+                log.info(status_msg)
+                h.flash_error(status_msg)
+                return False
+        except:
+            pass
 
         log.debug("payload: {}".format(payload))
         global REACHED_RESOPONSE
