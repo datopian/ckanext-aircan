@@ -299,5 +299,9 @@ def aircan_status_update(context, data_dict):
         'value': json.dumps(task_value),
         'error': json.dumps(data_dict.get('error', {})),
     }
-    task_update = p.toolkit.get_action('task_status_update')(context, task_dict)
-    return task_update
+    authorized = p.toolkit.check_access('package_create', context, data_dict)
+    if authorized:
+        task_update = p.toolkit.get_action('task_status_update')({'ignore_auth': True}, task_dict)
+        return task_update
+    else:
+         raise p.toolkit.NotAuthorized(p.toolkit._('Not Authorized'))
