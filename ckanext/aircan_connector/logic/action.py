@@ -121,6 +121,18 @@ def aircan_submit(context, data_dict):
             }
         }
         try:
+            # Datastore type resource shouldn't trigger airflow DAG.             
+            if data_dict.get('resource_json')['url_type'] == 'datastore':
+                log.info('Dump files are managed with the Datastore API')
+                p.toolkit.get_action('aircan_status_update')(context,{ 
+                    'dag_run_id': dag_run_id,
+                    'resource_id': res_id,
+                    'state': 'complete',
+                    'message': 'Dump files are managed with the Datastore API',
+                    'clear_logs': True
+                })
+                return
+
             aircan_status =  get_action(u'aircan_status')(context, 
                     {'resource_id': ckan_resource['id']})
             updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
