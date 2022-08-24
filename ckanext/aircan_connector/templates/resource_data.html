@@ -58,7 +58,7 @@
             <label class="control-label" for="field-primary_keys">Unique keys</label>
             <div class="controls ">
               {% set fields = h.datastore_dictionary(res.id)%} 
-              {% set selected_keys =  res.datastore_unique_keys or []  %}
+              {% set selected_keys = unique_keys or []  %}
               <select multiple id="field-datastore_unique_keys" name="datastore_unique_keys" 
               data-module="autocomplete" tabindex="-1" class="form-control" 
               {% if not res.datastore_append_or_update %} disabled {% endif %}

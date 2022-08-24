@@ -72,8 +72,19 @@ class ResourceDataController(MethodView):
         except logic.NotAuthorized:
             toolkit.abort(403, toolkit._('Not authorized to see this page'))
 
+        try:
+            unique_keys = toolkit.get_action('datastore_info')(
+                    context, {'id': resource_id}
+                ).get('primary_keys', [])
+        except:
+            unique_keys = []
+
+
         return toolkit.render('resource_data.html',
-                        extra_vars={'status': aircan_status})
+                        extra_vars={
+                            'status': aircan_status,
+                            'unique_keys': unique_keys
+                            })
 
 class ResourceUploadConfigController(MethodView):
     def _prepare(self, id, resource_id):
@@ -95,8 +106,7 @@ class ResourceUploadConfigController(MethodView):
         
             resource_dict = {
                 'id': resource_id,
-                'datastore_append_or_update': boolean_validator(datastore_append_or_update, {}),
-                'datastore_unique_keys': datastore_unique_keys
+                'datastore_append_or_update': boolean_validator(datastore_append_or_update, {})
                 }
 
             toolkit.c.resource = toolkit.get_action('resource_patch')(context, resource_dict) 

@@ -3,6 +3,8 @@ import requests
 from datetime import date
 from ckan.common import config
 from ckan.plugins.toolkit import get_action, check_access
+from sqlalchemy import create_engine
+
 import logging
 import json
 import uuid
@@ -95,6 +97,13 @@ def aircan_submit(context, data_dict):
         bq_table_name = ckan_resource.get('bq_table_name')
         log.debug("bq_table_name: {}".format(bq_table_name))
         dag_run_id = str(uuid.uuid4())
+        
+        try:
+            datastore_unique_keys = get_action('datastore_info')(
+                    context, {'id': res_id}).get('primary_keys', [])
+        except:
+            datastore_unique_keys = []
+
         payload = { 
             "dag_run_id": dag_run_id,
             "conf": {
@@ -105,7 +114,7 @@ def aircan_submit(context, data_dict):
                     "schema": schema,
                     "package_id": ckan_resource.get('package_id'),
                     "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
-                    "datastore_unique_keys": ckan_resource.get('datastore_unique_keys', False)
+                    "datastore_unique_keys": datastore_unique_keys
                 },
                 "ckan_config": {
                     "api_key": ckan_api_key,
@@ -317,3 +326,34 @@ def aircan_status_update(context, data_dict):
         return task_update
     else:
          raise p.toolkit.NotAuthorized(p.toolkit._('Not Authorized'))
+
+
+@p.toolkit.chained_action
+def datastore_info(up_func, context, data_dict):
+    result = up_func(context, data_dict)
+    sql_get_unique_key = '''
+        SELECT
+            a.attname AS column_names
+        FROM
+            pg_class t,
+            pg_index idx,
+            pg_attribute a
+        WHERE
+            t.oid = idx.indrelid
+            AND a.attrelid = t.oid
+            AND a.attnum = ANY(idx.indkey)
+            AND t.relkind = 'r'
+            AND idx.indisunique = true
+            AND idx.indisprimary = false
+            AND t.relname = %s
+        '''
+    datatore_connection = config['ckan.datastore.write_url']
+    engine = create_engine(datatore_connection).connect()
+    key_parts = engine.execute(sql_get_unique_key,
+                                              data_dict['id'])
+    primary_keys = [x[0] for x in key_parts]
+    engine.close()
+    result.update({
+        'primary_keys': primary_keys
+    })
+    return result
