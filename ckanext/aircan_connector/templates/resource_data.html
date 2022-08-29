@@ -39,7 +39,8 @@
       {% endif %}
     </tr>
   </table>
-  {% if not res.url_type == 'datastore' and h.datastore_append_or_update() %}
+  
+  {% if not res.url_type == 'datastore' and h.datastore_append_or_update() and c.userobj.sysadmin %}
     <div class="aircan-configuration">
       <h2>Upload Configuration</h2>
       <form method="post" action="{{ upload_config }}" data-module="aircan-js">
