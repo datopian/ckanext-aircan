@@ -16,16 +16,19 @@ IAM_SCOPE = 'https://www.googleapis.com/auth/iam'
 OAUTH_TOKEN_URI = 'https://www.googleapis.com/oauth2/v4/token'
 
 class DagStatusReport:
-    def __init__(self, dag_name, execution_date, config):
+    def __init__(self, dag_name, dag_run_id, config):
         self.dag_name = dag_name
         self.config = config
-        self.execution_date = (("/" + str(execution_date)) if execution_date != '' else '')
+        self.dag_run_id = dag_run_id
 
     def get_local_aircan_report(self):
         log.info("Building Airflow local status report")
         ckan_airflow_endpoint_url = self.config.get('ckan.airflow.url')
-        log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
-        response = requests.get(ckan_airflow_endpoint_url,
+        log.info("Airflow Endpoint URL: {0}/{1}".format(ckan_airflow_endpoint_url, self.dag_run_id))
+        response = requests.get('{0}/{1}'.format(ckan_airflow_endpoint_url, self.dag_run_id),
+                                auth=requests.auth.HTTPBasicAuth(
+                                        self.config['ckan.airflow.username'], 
+                                        self.config['ckan.airflow.password']),
                                  headers={'Content-Type': 'application/json',
                                           'Cache-Control': 'no-cache'})
         log.info(response.text)
@@ -33,22 +36,22 @@ class DagStatusReport:
         log.info('Airflow status request completed')
         return {"success": True, "airflow_api_aircan_status": response.json()}
 
+
     def get_gcp_report(self):
-        log.info("Building GCP DAG status report")
         gcp = GCPHandler(self.config, {})
-        client_id = gcp.client_setup()
+        log.info("Trigger DAG - {} on GCP".format(self.dag_name))
         webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
         webserver_url = (
             'https://'
             + webserver_id
-            + '.appspot.com/api/experimental/dags/'
+            + '.composer.googleusercontent.com/api/v1/dags/'
             + self.dag_name
-            + '/dag_runs'
-            + (self.execution_date)
+            + '/dagRuns/'
+            + self.dag_run_id
         )
-        
-        airflow_api_status = gcp.make_iap_request(webserver_url, client_id, method='GET')
-
+        log.info("The Webserver Url: {}".format(webserver_url))
+        # Make a POST request to IAP which then Triggers the DAG
+        airflow_api_status = gcp.make_iap_request(webserver_url, method='GET')
         return {"success": True, "airflow_api_aircan_status": airflow_api_status, "gcp_logs": {} }
 
     def get_gcp_logs_for_dag(self):

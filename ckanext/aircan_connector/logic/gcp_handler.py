@@ -5,9 +5,11 @@ import requests
 import six.moves.urllib.parse
 import logging
 import json
+
+import google.auth
 from google.auth.transport.requests import Request, AuthorizedSession
 
-from google.oauth2 import id_token, service_account
+from google.oauth2 import service_account
 
 log = logging.getLogger(__name__)
 
@@ -36,40 +38,20 @@ class GCPHandler:
         return environment_url
 
 
-    def client_setup(self):
-        authed_session = self.get_auth_session()
-        environment_url = self.get_env_url()
-        composer_response = authed_session.request('GET', environment_url)
-        environment_data = composer_response.json()
-        airflow_uri = environment_data['config']['airflowUri']
-        redirect_response = requests.get(airflow_uri, allow_redirects=False)
-        redirect_location = redirect_response.headers['location']
-        parsed = six.moves.urllib.parse.urlparse(redirect_location)
-        query_string = six.moves.urllib.parse.parse_qs(parsed.query)
-        client_id = query_string['client_id'][0]
-        return client_id
-
-
     def trigger_dag(self):
-        log.info("Trigger DAG on GCP")
-        client_id = self.client_setup()
-        log.info("clien_id: {}".format(client_id))
-        # This should be part of your webserver's URL:
-        # {tenant-project-id}.appspot.com
-        webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
-        log.info("webserver_id: {}".format(webserver_id))
         dag_name = self.config.get('ckan.airflow.cloud.dag_name')
-        log.info("dag_name: {}".format(dag_name))
+        log.info("Trigger DAG - {} on GCP".format(dag_name))
+        webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
         webserver_url = (
             'https://'
             + webserver_id
-            + '.appspot.com/api/experimental/dags/'
+            + '.composer.googleusercontent.com/api/v1/dags/'
             + dag_name
-            + '/dag_runs'
+            + '/dagRuns'
         )
-        log.info("webserver_url: {}".format(webserver_url))
+        log.info("The Webserver Url: {}".format(webserver_url))
         # Make a POST request to IAP which then Triggers the DAG
-        return self.make_iap_request(webserver_url, client_id, method='POST', json=self.payload)
+        return self.make_iap_request(webserver_url, method='POST', json=self.payload)
 
 
     def get_google_token_id(self, client_id):
@@ -80,15 +62,27 @@ class GCPHandler:
         credentials.refresh(request)
         return credentials.token
 
-    def make_iap_request(self, url, client_id, method='GET', **kwargs):
-        if 'timeout' not in kwargs:
-            kwargs['timeout'] = 90
-        
-        google_open_id_connect_token = self.get_google_token_id(client_id)
-        resp = requests.request(
-            method, url,
-            headers={'Authorization': 'Bearer {}'.format(
-                google_open_id_connect_token)}, **kwargs)
+
+    def make_iap_request(self, url, method='GET', **kwargs):
+        """
+        Make a request to Cloud Composer 2 environment's web server.
+        Args:
+        url: The URL to fetch.
+        method: The request method to use ('GET', 'OPTIONS', 'HEAD', 'POST', 'PUT',
+            'PATCH', 'DELETE')
+        **kwargs: Any of the parameters defined for the request function:
+                    https://github.com/requests/requests/blob/master/requests/api.py
+                    If no timeout is provided, it is set to 90 by default.
+        """
+
+        authed_session = self.get_auth_session()
+
+        # Set the default timeout, if missing
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = 90
+
+        resp = authed_session.request(method, url, **kwargs)
+        log.info("Response from IAP: {}".format(resp.text))
         log.info('Request sent to GCP. Response code: {!r} '.format(resp.status_code))
         
         if resp.status_code == 403:
