@@ -130,7 +130,14 @@ def aircan_submit(context, data_dict):
                 },
                 "ckan_config": {
                     "api_key": ckan_api_key,
-                    "site_url": config.get('ckan.site_url'),    
+                    "site_url": config.get('ckan.site_url'),
+                    "ckan_datastore_postgres_url": config.get('ckan.datastore.write_url'),
+                    "aircan_load_with_postgres_copy": config.get('ckanext.aircan.load_with_postgres_copy', False),
+                    "aircan_datastore_chunk_insert_rows_size": config.get('ckanext.aircan.datastore_chunk_insert_rows_size', 250),
+                    "aircan_append_or_update_datastore": config.get('ckanext.aircan.append_or_update_datastore', False),
+                    "aircan_notification_to": config.get('ckanext.aircan.notification_to', 'editor'),
+                    "aircan_notificaton_from": config.get('ckanext.aircan.notification_from', config.get('smtp.mail_from')),
+                    "aircan_notification_subject": config.get('ckanext.aircan.notification_subject', '[Alert] Data ingestion has failed.')
                 },
                 "big_query": {
                     "gcs_uri": gcs_uri,

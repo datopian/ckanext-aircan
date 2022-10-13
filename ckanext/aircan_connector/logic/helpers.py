@@ -15,5 +15,5 @@ def aircan_status(resource_id):
         }
 
 def datastore_append_or_update():
-    active = toolkit.config.get('ckan.aircan.datastore_append_or_update_data', False)
+    active = toolkit.config.get('ckan.aircan.enable_datastore_upload_configuration', False)
     return boolean_validator(active, {})
