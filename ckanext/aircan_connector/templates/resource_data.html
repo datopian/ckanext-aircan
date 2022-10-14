@@ -1,10 +1,13 @@
 {% extends "package/resource_edit_base.html" %}
+{% import 'macros/form.html' as form %}
 
 {% block subtitle %}{{ h.dataset_display_name(pkg) }} - {{ h.resource_display_name(res) }}{% endblock %}
 
 {% block primary_content_inner %}
 
   {% set action = h.url_for('aircan.resource_data', id=pkg.name, resource_id=res.id) %}
+  {% set upload_config = h.url_for('aircan.upload_config', id=pkg.name, resource_id=res.id) %}
+
   {% set show_table = true %}
 
   {% if status.error and status.error.message %}
@@ -36,6 +39,45 @@
       {% endif %}
     </tr>
   </table>
+  
+  {% if not res.url_type == 'datastore' and h.datastore_append_or_update() and c.userobj.sysadmin %}
+    <div class="aircan-configuration">
+      <h2>Upload Configuration</h2>
+      <form method="post" action="{{ upload_config }}" data-module="aircan-js">
+        <div class="form-group control-medium">
+          <label for="field-datastore_append_or_update" class="control-label">{{ _('Append/Update records') }}</label>
+          <div class="controls" >
+            <select id="field-datastore_append_or_update" name="datastore_append_or_update" class="form-control" data-module-append="{{res.id}}">
+              {% for option in [False, True] %}
+                <option value="{{ option }}" {% if option  == res.datastore_append_or_update %} selected {% endif %}> {{option}}</option>
+              {% endfor %}
+            </select>
+            {{form.info(text='Append or update data to an existing datastore table, if re-uploaded file has identical fields.', inline=false, classes=[])}}
+          </div>
+        </div>
+        <div class="form-group control-medium">
+            <label class="control-label" for="field-primary_keys">Unique keys</label>
+            <div class="controls ">
+              {% set fields = h.datastore_dictionary(res.id)%} 
+              {% set selected_keys = unique_keys or []  %}
+              <select multiple id="field-datastore_unique_keys" name="datastore_unique_keys" 
+              data-module="autocomplete" tabindex="-1" class="form-control" 
+              {% if not res.datastore_append_or_update %} disabled {% endif %}
+              >
+                {% for option in fields %}
+                  <option value="{{ option['id'] }}"{% if option['id'] in selected_keys  %} selected {% endif %} > {{option['id']}}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {{form.info(text='Update if a record with the same key already exists, otherwise insert as a new record.', inline=false, classes=[])}}
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" name="save" type="submit" >{{ _('Save') }}</button>
+      </div>
+      </form>
+    </div>
+  {% endif %}
+
   {% if status.status and status.logs and show_table %}
   <h3>{{ _('Upload Log') }}</h3>
   <ul class="activity">
@@ -51,7 +93,6 @@
           {% endfor %}
           <span class="date" title="{{ h.render_datetime(item.datetime, with_hours=True) }}">
             {{ h.time_ago_from_timestamp(item.datetime) }}
-            <a href="#" data-target="popover" data-content="<dl>{% for key, value in item.iteritems() %}<dt>{{ key }}</dt><dd>{{ h.clean_html(value|string) }}</dd>{% endfor %}</dl>" data-html="true">{{ _('Details') }}</a>
           </span>
         </p>
       </li>
@@ -61,6 +102,7 @@
       <p class="muted">{{ _('End of log') }}</p>
     </li>
   </ul>
+  {% resource 'aircan_connector/aircan' %}
+
   {% endif %}
-  
 {% endblock %}

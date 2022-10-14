@@ -83,6 +83,16 @@ The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the s
 # all other variables
 CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER
 ```
+## For CKAN Datastore data loader dag
+
+* Add `ckanext.aircan.load_with_postgres_copy=True` env to load with postgres copy loader. By default it loads with datastore API. 
+* Add `ckanext.aircan.datastore_chunk_insert_rows_size=300` env variable to configure number of records to send a request to datastore. Default 250 rows.
+* addd `append_or_update_datastore = true` if new data schema matches with old schema append or update data, otherwise create new table
+* add `ckanext.aircan.enable_datastore_upload_configuration=true` to enable the upload configuration UI option.
+* add `ckanext.aircan.notification_to = author, maintainer, editor, someone@gmail.com` failure email notification sent to. 
+* add `ckanext.aircan.notification_from = sender@gmail.com` failure notification from email.
+* add `ckanext.aircan.notification_subject` configure notification subject.
+
 
 ### Update aircan run status
  The `aircan_status_update` API can be use to store or update the run status for given resource. It accepts the POST request with authorized user.

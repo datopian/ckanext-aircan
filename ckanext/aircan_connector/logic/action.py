@@ -3,6 +3,8 @@ import requests
 from datetime import date
 from ckan.common import config
 from ckan.plugins.toolkit import get_action, check_access
+from sqlalchemy import create_engine
+
 import logging
 import json
 import uuid
@@ -29,6 +31,17 @@ NO_SCHEMA_ERROR_MESSAGE = 'Resource <a href="{0}">{1}</a> has no schema so canno
                         ' Please add a Table Schema in the resource schema attribute.'\
                         ' See <a href="https://github.com/datopian/ckanext-aircan#airflow-instance-on-google-composer"> Airflow instance on Google Composer </a>' \
                         ' section in AirCan docs for more.'
+
+def _get_editor_user_email(context, pacakge_id):
+    try:
+        package_activities = get_action('package_activity_list')(
+                                context, {'id': pacakge_id, 
+                                        'limit': 1, 'include_hidden_activity': True})
+        user_id = package_activities[0].get('user_id')
+        user_dict = get_action('user_show')(context, {'id': user_id})
+        return user_dict.get('email', False)
+    except:
+        return False
 
 
 def aircan_submit(context, data_dict):
@@ -95,6 +108,13 @@ def aircan_submit(context, data_dict):
         bq_table_name = ckan_resource.get('bq_table_name')
         log.debug("bq_table_name: {}".format(bq_table_name))
         dag_run_id = str(uuid.uuid4())
+        
+        try:
+            datastore_unique_keys = get_action('datastore_info')(
+                    context, {'id': res_id}).get('primary_keys', [])
+        except:
+            datastore_unique_keys = []
+
         payload = { 
             "dag_run_id": dag_run_id,
             "conf": {
@@ -102,11 +122,22 @@ def aircan_submit(context, data_dict):
                     "path": ckan_resource.get('url'),
                     "format": ckan_resource.get('format'),
                     "ckan_resource_id": res_id,
-                    "schema": schema
+                    "schema": schema,
+                    "package_id": ckan_resource.get('package_id'),
+                    "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
+                    "datastore_unique_keys": datastore_unique_keys,
+                    "editor_user_email" : _get_editor_user_email(context, pacakge_name)
                 },
                 "ckan_config": {
                     "api_key": ckan_api_key,
-                    "site_url": config.get('ckan.site_url'),    
+                    "site_url": config.get('ckan.site_url'),
+                    "ckan_datastore_postgres_url": config.get('ckan.datastore.write_url'),
+                    "aircan_load_with_postgres_copy": config.get('ckanext.aircan.load_with_postgres_copy', False),
+                    "aircan_datastore_chunk_insert_rows_size": config.get('ckanext.aircan.datastore_chunk_insert_rows_size', 250),
+                    "aircan_append_or_update_datastore": config.get('ckanext.aircan.append_or_update_datastore', False),
+                    "aircan_notification_to": config.get('ckanext.aircan.notification_to', 'editor'),
+                    "aircan_notificaton_from": config.get('ckanext.aircan.notification_from', config.get('smtp.mail_from')),
+                    "aircan_notification_subject": config.get('ckanext.aircan.notification_subject', '[Alert] Data ingestion has failed.')
                 },
                 "big_query": {
                     "gcs_uri": gcs_uri,
@@ -117,6 +148,35 @@ def aircan_submit(context, data_dict):
                 "output_bucket": str(date.today())
             }
         }
+        try:
+            # Datastore type resource shouldn't trigger airflow DAG.             
+            if data_dict.get('resource_json')['url_type'] == 'datastore':
+                log.info('Dump files are managed with the Datastore API')
+                p.toolkit.get_action('aircan_status_update')(context,{ 
+                    'dag_run_id': dag_run_id,
+                    'resource_id': res_id,
+                    'state': 'complete',
+                    'message': 'Dump files are managed with the Datastore API',
+                    'clear_logs': True
+                })
+                return
+
+            aircan_status =  get_action(u'aircan_status')(context, 
+                    {'resource_id': ckan_resource['id']})
+            updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
+            time_since_last_updated = datetime.datetime.utcnow() - updated
+            wait_till = datetime.timedelta(minutes=int(10))
+            # wait for the next 10 minutes if already submitted.
+            if aircan_status.get('status', '') in ['pending', 'progress'] and  \
+                    time_since_last_updated < wait_till:
+                status_msg = 'A pending task was found {0} for this resource, so \
+                                skipping this duplicate task'.format(ckan_resource['id'])
+                log.info(status_msg)
+                h.flash_error(status_msg)
+                return False
+        except:
+            pass
+
         log.debug("payload: {}".format(payload))
         global REACHED_RESOPONSE
         REACHED_RESOPONSE = True
@@ -279,5 +339,40 @@ def aircan_status_update(context, data_dict):
         'value': json.dumps(task_value),
         'error': json.dumps(data_dict.get('error', {})),
     }
-    task_update = p.toolkit.get_action('task_status_update')(context, task_dict)
-    return task_update
+    authorized = p.toolkit.check_access('package_create', context, data_dict)
+    if authorized:
+        task_update = p.toolkit.get_action('task_status_update')({'ignore_auth': True}, task_dict)
+        return task_update
+    else:
+         raise p.toolkit.NotAuthorized(p.toolkit._('Not Authorized'))
+
+
+@p.toolkit.chained_action
+def datastore_info(up_func, context, data_dict):
+    result = up_func(context, data_dict)
+    sql_get_unique_key = '''
+        SELECT
+            a.attname AS column_names
+        FROM
+            pg_class t,
+            pg_index idx,
+            pg_attribute a
+        WHERE
+            t.oid = idx.indrelid
+            AND a.attrelid = t.oid
+            AND a.attnum = ANY(idx.indkey)
+            AND t.relkind = 'r'
+            AND idx.indisunique = true
+            AND idx.indisprimary = false
+            AND t.relname = %s
+        '''
+    datatore_connection = config['ckan.datastore.write_url']
+    engine = create_engine(datatore_connection).connect()
+    key_parts = engine.execute(sql_get_unique_key,
+                                              data_dict['id'])
+    primary_keys = [x[0] for x in key_parts]
+    engine.close()
+    result.update({
+        'primary_keys': primary_keys
+    })
+    return result

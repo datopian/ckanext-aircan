@@ -23,6 +23,7 @@ DEFAULT_FORMATS = [
 
 class Aircan_ConnectorPlugin(p.SingletonPlugin):
     p.implements(p.IConfigurer, inherit=True)
+    p.implements(p.IConfigurable, inherit=True)
     p.implements(p.IResourceUrlChange)
     p.implements(p.IAuthFunctions)
     p.implements(p.IBlueprint)
@@ -36,6 +37,10 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         toolkit.add_public_directory(config_, 'public')
         toolkit.add_resource('fanstatic', 'aircan_connector')
 
+    def configure(self, config):
+        self.config = config
+        aircan_formats = config.get('ckan.aircan.formats', '').lower()
+        self.aircan_formats = aircan_formats.split() or DEFAULT_FORMATS
 
     # IResourceUrlChange
     def notify(self, resource):
@@ -63,7 +68,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         resource_format = resource_dict.get('format')
         submit = (
                 resource_format
-                and resource_format.lower() in DEFAULT_FORMATS
+                and resource_format.lower() in self.aircan_formats
         )
         if not submit:
             return
@@ -105,7 +110,8 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         return {
             'aircan_submit': action.aircan_submit,
             'aircan_status': action.aircan_status,
-            'aircan_status_update': action.aircan_status_update
+            'aircan_status_update': action.aircan_status_update,
+            'datastore_info': action.datastore_info
         }
 
 
@@ -124,5 +130,6 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     #ITemplateHelpers
     def get_helpers(self):
         return {
-            'aircan_status': helpers.aircan_status
+            'aircan_status': helpers.aircan_status,
+            'datastore_append_or_update': helpers.datastore_append_or_update
         }
