@@ -149,8 +149,10 @@ def aircan_submit(context, data_dict):
             }
         }
         try:
-            # Datastore type resource shouldn't trigger airflow DAG.             
-            if data_dict.get('resource_json')['url_type'] == 'datastore':
+            # Datastore type resource shouldn't trigger airflow DAG.   
+            if data_dict.get('resource_json')['url_type'] == 'datastore' or \
+                    '_datastore_only_resource' in data_dict.get('resource_json')['url']: 
+
                 log.info('Dump files are managed with the Datastore API')
                 p.toolkit.get_action('aircan_status_update')(context,{ 
                     'dag_run_id': dag_run_id,
