@@ -212,7 +212,7 @@ def aircan_submit(context, data_dict):
             'dag_run_id': dag_run_id,
             'resource_id': res_id,
             'state': 'pending',
-            'message': 'Added to the queue to be processed.',
+            'message': 'Added to the queue to be processed with run id \"{0}\"'.format(dag_run_id),
             'clear_logs': True
             })
 
