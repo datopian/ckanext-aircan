@@ -131,6 +131,13 @@ def aircan_submit(context, data_dict):
                 "ckan_config": {
                     "api_key": ckan_api_key,
                     "site_url": config.get('ckan.site_url'),
+                    'ckan_s3_access_key_id': config.get('ckanext.s3filestore.aws_access_key_id', ''),
+                    'ckan_s3_secret_access_key': config.get('ckanext.s3filestore.aws_secret_access_key', ''),
+                    'ckan_s3_bucket_name': config.get('ckanext.s3filestore.aws_bucket_name', ''),
+                    'ckan_s3_storage_path': config.get('ckanext.s3filestore.aws_storage_path', ''),
+                    'ckan_s3_host_name': config.get('ckanext.s3filestore.host_name', ''),
+                    'ckan_s3_region_name': config.get('ckanext.s3filestore.region_name', ''),
+                    'ckan_s3_signature_version': config.get('ckanext.s3filestore.signature_version','s3v4'),
                     "ckan_datastore_postgres_url": config.get('ckan.datastore.write_url'),
                     "aircan_load_with_postgres_copy": config.get('ckanext.aircan.load_with_postgres_copy', False),
                     "aircan_datastore_chunk_insert_rows_size": config.get('ckanext.aircan.datastore_chunk_insert_rows_size', 250),
