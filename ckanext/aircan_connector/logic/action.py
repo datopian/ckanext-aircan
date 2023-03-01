@@ -48,6 +48,11 @@ def aircan_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
     check_access('aircan_submit', context, data_dict)
     try:
+        upload_to_datastore = data_dict.get('upload_to_datastore', True)
+        if not upload_to_datastore:
+            log.debug('Skipping upload to datastore as upload_to_datastore is set to False')
+            return
+
         res_id = data_dict['resource_id']
         user = get_action('user_show')(context, {'id': context['user']})
         ckan_api_key = user['apikey']

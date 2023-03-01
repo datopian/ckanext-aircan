@@ -15,8 +15,8 @@ class ResourceDataController(MethodView):
         context = {
             'model': model,
             'session': model.Session,
-            'user': toolkit.g.user,
-            'auth_user_obj': toolkit.g.userobj
+            'user': toolkit.c.user,
+            'auth_user_obj': toolkit.c.userobj
         }
         return context
 
@@ -34,13 +34,16 @@ class ResourceDataController(MethodView):
                 context, {
                     'id': resource_id,
                 })
+            
             toolkit.get_action(u'aircan_submit')(context, {
                     u'resource_id': resource_dict['id'],
                     u'resource_json': resource_dict,
                     u'pacakge_name': pacakge_dict.get('name'),
                     u'organization_name': pacakge_dict.get('organization', {}).get('name'),
-                    u'resource_hash': resource_dict.get('hash')
+                    u'resource_hash': resource_dict.get('hash'),
+                    u'upload_to_datastore': toolkit.asbool(pacakge_dict.get('upload_to_bigquery', True))
                     })
+            
         except logic.ValidationError:
             pass
 
