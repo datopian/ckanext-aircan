@@ -94,8 +94,8 @@ class ResourceUploadConfigController(MethodView):
         context = {
             'model': model,
             'session': model.Session,
-            'user': toolkit.g.user,
-            'auth_user_obj': toolkit.g.userobj
+            'user': toolkit.c.user,
+            'auth_user_obj': toolkit.c.userobj
         }
         return context
 
