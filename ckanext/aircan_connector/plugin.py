@@ -96,7 +96,9 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
                     u'resource_json': resource_dict,
                     u'pacakge_name': pacakge_name,
                     u'organization_name': organization_name,
-                    u'resource_hash': resource_hash
+                    u'resource_hash': resource_hash,
+                    u'upload_to_datastore': toolkit.asbool(pacakge_dict.get('upload_to_bigquery', True))
+
                 }
             )
         except toolkit.ValidationError as e:
