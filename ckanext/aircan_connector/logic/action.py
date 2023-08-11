@@ -16,6 +16,8 @@ from dag_status_report import DagStatusReport
 import ckan.logic as logic
 import ckan.plugins as p
 import ckan.lib.helpers as h
+import boto3
+from botocore.client import Config
 
 REACHED_RESOPONSE  = False
 AIRCAN_RESPONSE_AFTER_SUBMIT = None
@@ -43,6 +45,33 @@ def _get_editor_user_email(context, pacakge_id):
     except:
         return False
 
+
+def upload_to_gcp(download_url, org, pacakge_name, resource):
+    '''
+        Upload to GCP is required if external storage is used.
+        Bigquery can fetch only from GCP
+    '''
+    endpoint_url = config.get('ckanext.aircan.bucket_endpoint', '')
+    access_id = config.get('ckanext.aircan.bucket_access_id', '')
+    secret = config.get('ckanext.aircan.bucket_access_key', '')
+    r = requests.get(download_url, stream=True)
+    s3 = boto3.resource('s3', endpoint_url=endpoint_url, aws_access_key_id=access_id, aws_secret_access_key=secret, config=Config(signature_version='s3v4'))
+    bucket_name = config.get('ckan.giftless.bucket', '')
+    key = org + '/' + pacakge_name + '/' + resource # key is the name of file on your bucket
+    try:
+        bucket = s3.Bucket(bucket_name)
+        bucket.upload_fileobj(r.raw, key)
+    except Exception as e:
+        pass
+
+def get_resource_signed_url(ckan_resource_url):
+    try:
+        download_url = ckan_resource_url + '/download'
+        download_url_req = requests.get(download_url, allow_redirects=False)
+        download_url = download_url_req.headers['Location']
+        return download_url
+    except Exception as e:
+        pass
 
 def aircan_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
@@ -107,6 +136,10 @@ def aircan_submit(context, data_dict):
         organization_name = data_dict['organization_name']
         resource_hash = data_dict['resource_hash']
         giftless_bucket = config.get('ckan.giftless.bucket', '')
+        external_bucket = config.get('ckan.giftless.external_bucket', False)
+        if external_bucket:
+            download_uri = get_resource_signed_url(ckan_resource_url)
+            upload_to_gcp(download_uri, organization_name, pacakge_name, resource_hash)
         gcs_uri = 'gs://%s/%s/%s/%s' % (giftless_bucket, organization_name, pacakge_name, resource_hash)
         log.debug("gcs_uri: {}".format(gcs_uri))
 
