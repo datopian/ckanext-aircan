@@ -64,10 +64,13 @@ def upload_to_gcp(download_url, org, pacakge_name, resource):
     except Exception as e:
         pass
 
-def get_resource_signed_url(ckan_resource_url):
+def get_resource_signed_url(ckan_resource_url, ckan_api_key):
     try:
+        headers = {
+            'Authorization': ckan_api_key
+        }
         download_url = ckan_resource_url + '/download'
-        download_url_req = requests.get(download_url, allow_redirects=False)
+        download_url_req = requests.get(download_url,headers=headers, allow_redirects=False)
         download_url = download_url_req.headers['Location']
         return download_url
     except Exception as e:
@@ -138,7 +141,7 @@ def aircan_submit(context, data_dict):
         giftless_bucket = config.get('ckan.giftless.bucket', '')
         external_bucket = config.get('ckan.giftless.external_bucket', False)
         if external_bucket:
-            download_uri = get_resource_signed_url(ckan_resource_url)
+            download_uri = get_resource_signed_url(ckan_resource_url, ckan_api_key)
             upload_to_gcp(download_uri, organization_name, pacakge_name, resource_hash)
         gcs_uri = 'gs://%s/%s/%s/%s' % (giftless_bucket, organization_name, pacakge_name, resource_hash)
         log.debug("gcs_uri: {}".format(gcs_uri))
