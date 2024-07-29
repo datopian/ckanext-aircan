@@ -32,23 +32,6 @@ NO_SCHEMA_ERROR_MESSAGE = 'Resource <a href="{0}">{1}</a> has no schema so canno
                         ' See <a href="https://github.com/datopian/ckanext-aircan#airflow-instance-on-google-composer"> Airflow instance on Google Composer </a>' \
                         ' section in AirCan docs for more.'
 
-def _get_editor_user_email(context, pacakge_id):
-    try:
-        log.info("=============debug=========+++>")
-        package_activities = get_action('package_activity_list')(
-                                context, {'id': pacakge_id, 
-                                        'limit': 1, 'include_hidden_activity': True})
-        log.info(package_activities)
-        user_id = package_activities[0].get('user_id')
-        log.info(user_id)
-        user_dict = get_action('user_show')(context, {'id': user_id})
-        log.info(user_dict)
-        return user_dict.get('email', False)
-    except Exception as e:
-        log.info("Failed to get the editor email")
-        log.info(e)
-        return False
-
 
 def aircan_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
@@ -132,7 +115,6 @@ def aircan_submit(context, data_dict):
                     "package_id": ckan_resource.get('package_id'),
                     "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
                     "datastore_unique_keys": datastore_unique_keys,
-                    "editor_user_email" : _get_editor_user_email(context, pacakge_name)
                 },
                 "ckan_config": {
                     "api_key": ckan_api_key,
