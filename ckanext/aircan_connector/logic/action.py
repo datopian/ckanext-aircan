@@ -105,17 +105,7 @@ def aircan_submit(context, data_dict):
         except Exception as e:
             logging.error('Error while fetching datastore unique keys: {}'.format(e))
             datastore_unique_keys = []
-
-        if append_enabled and not datastore_unique_keys:
-            p.toolkit.get_action('aircan_status_update')(context,{ 
-                'dag_run_id': dag_run_id,
-                'resource_id': res_id,
-                'state': 'failed',
-                'message': 'Datastore unique keys are required for append operation',
-                'clear_logs': True
-                })
-            return 
-
+            
         payload = { 
             "dag_run_id": dag_run_id,
             "conf": {
