@@ -97,12 +97,23 @@ def aircan_submit(context, data_dict):
         bq_table_name = ckan_resource.get('bq_table_name')
         log.debug("bq_table_name: {}".format(bq_table_name))
         dag_run_id = str(uuid.uuid4())
+        append_enabled = ckan_resource.get('datastore_append_or_update', False)
         
         try:
             datastore_unique_keys = get_action('datastore_info')(
                     context, {'id': res_id}).get('primary_keys', [])
         except:
             datastore_unique_keys = []
+
+        if append_enabled and not datastore_unique_keys:
+            p.toolkit.get_action('aircan_status_update')(context,{ 
+                'dag_run_id': dag_run_id,
+                'resource_id': res_id,
+                'state': 'failed',
+                'message': 'Datastore unique keys are required for append operation',
+                'clear_logs': True
+                })
+            return 
 
         payload = { 
             "dag_run_id": dag_run_id,
