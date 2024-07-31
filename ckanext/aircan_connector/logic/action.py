@@ -102,7 +102,8 @@ def aircan_submit(context, data_dict):
         try:
             datastore_unique_keys = get_action('datastore_info')(
                     context, {'id': res_id}).get('primary_keys', [])
-        except:
+        except Exception as e:
+            logging.error('Error while fetching datastore unique keys: {}'.format(e))
             datastore_unique_keys = []
 
         if append_enabled and not datastore_unique_keys:
