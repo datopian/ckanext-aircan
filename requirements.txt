@@ -1,5 +1,5 @@
 requests_toolbelt==0.9.1
-grpcio==1.30.0
+grpcio==1.69.0
 google-auth==2.37.0
 requests==2.24.0
 google-cloud-logging==3.11.3
