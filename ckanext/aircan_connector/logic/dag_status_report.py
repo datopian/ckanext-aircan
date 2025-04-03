@@ -3,7 +3,7 @@
 import logging as l
 import json
 import requests
-from gcp_handler import GCPHandler
+from ckanext.aircan_connector import gcp_handler
 
 from google.oauth2 import id_token, service_account
 # from google.cloud import logging_v2
@@ -37,7 +37,7 @@ class DagStatusReport:
 
 
     def get_gcp_report(self):
-        gcp = GCPHandler(self.config, {})
+        gcp = gcp_handler.GCPHandler(self.config, {})
         log.info("Trigger DAG - {} on GCP".format(self.dag_name))
         webserver_id = self.config.get('ckan.airflow.cloud.web_ui_id')
         webserver_url = (
