@@ -3,7 +3,7 @@
 import logging as l
 import json
 import requests
-from ckanext.aircan_connector import gcp_handler
+from ckanext.aircan_connector.logic import gcp_handler
 
 from google.oauth2 import id_token, service_account
 # from google.cloud import logging_v2

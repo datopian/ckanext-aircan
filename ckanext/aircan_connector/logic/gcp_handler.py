@@ -1,12 +1,8 @@
 # encoding: utf-8
 
-import google.auth
-import requests
-import six.moves.urllib.parse
 import logging
 import json
 
-import google.auth
 from google.auth.transport.requests import Request, AuthorizedSession
 
 from google.oauth2 import service_account

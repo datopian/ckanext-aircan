@@ -56,7 +56,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         self._submit_to_aircan(resource_dict)
 
     # IResourceController
-    def after_create(self, context, resource_dict):
+    def after_resource_create(self, context, resource_dict):
         self._submit_to_aircan(resource_dict)
 
     def _submit_to_aircan(self, resource_dict):
@@ -97,8 +97,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
                     u'pacakge_name': pacakge_name,
                     u'organization_name': organization_name,
                     u'resource_hash': resource_hash,
-                    u'upload_to_datastore': toolkit.asbool(pacakge_dict.get('upload_to_bigquery', True))
-
+                    u'upload_to_datastore': toolkit.asbool(pacakge_dict.get('upload_to_bigquery', True)),
                 }
             )
         except toolkit.ValidationError as e:
