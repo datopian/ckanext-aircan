@@ -4,6 +4,7 @@ from datetime import date
 from ckan.common import config
 from ckan.plugins.toolkit import get_action, check_access
 from sqlalchemy import create_engine
+import ast
 
 import logging
 import json
@@ -174,7 +175,14 @@ def aircan_submit(context, data_dict):
     '''
 
     table_schema = ckan_resource.get('schema', {})
-    schema = json.dumps(table_schema)
+    schema = f'"{repr(table_schema)}"'
+
+    try:
+        parsed_dict = json.loads(schema)
+        parsed_dict = ast.literal_eval(schema)
+        log.info("Parsed schema: {}".format(parsed_dict))
+    except ValueError as e:
+        log.error("Failed to parse schema: {}".format(schema))
 
     # create giftless resource file uri to be passed to aircan
     pacakge_name = data_dict['pacakge_name']
