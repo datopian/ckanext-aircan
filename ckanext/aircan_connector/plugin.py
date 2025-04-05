@@ -43,17 +43,17 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         self.aircan_formats = aircan_formats.split() or DEFAULT_FORMATS
 
     # IResourceUrlChange
-    def notify(self, resource):
-        context = {
-            u'model': model,
-            u'ignore_auth': True,
-        }
-        resource_dict = toolkit.get_action(u'resource_show')(
-            context, {
-                u'id': resource.id,
-            }
-        )
-        self._submit_to_aircan(resource_dict)
+    #def notify(self, resource):
+    #    context = {
+    #        u'model': model,
+    #        u'ignore_auth': True,
+    #    }
+    #    resource_dict = toolkit.get_action(u'resource_show')(
+    #        context, {
+    #            u'id': resource.id,
+    #        }
+    #    )
+    #    self._submit_to_aircan(resource_dict)
 
     # IResourceController
     def after_resource_create(self, context, resource_dict):
