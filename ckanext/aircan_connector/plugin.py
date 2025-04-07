@@ -60,6 +60,10 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     def after_resource_create(self, context, resource_dict):
         self._submit_to_aircan(resource_dict)
 
+    # IResourceController
+    def after_resource_update(self, context, resource_dict):
+        self._submit_to_aircan(resource_dict)
+
     def _submit_to_aircan(self, resource_dict):
         context = {
             u'model': model,
