@@ -476,6 +476,7 @@ def datastore_info(up_func, context, data_dict):
     # Check if GOOGLE_APPLICATION_CREDENTIALS is set, if so use it
     google_application_credentials = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', None)
     log.info("GOOGLE_APPLICATION_CREDENTIALS: {}".format(google_application_credentials))
+    credentials = None
     if google_application_credentials:
         google_application_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
         credentials = service_account.Credentials.from_service_account_file(google_application_credentials)
