@@ -4,6 +4,7 @@ from datetime import date
 from ckan.common import config
 from ckan.plugins.toolkit import get_action, check_access
 from sqlalchemy import create_engine
+from google.oauth2 import service_account
 import ast
 
 import logging
@@ -454,6 +455,7 @@ def aircan_status_update(context, data_dict):
 
 @p.toolkit.chained_action
 def datastore_info(up_func, context, data_dict):
+    log.info("Datastore info")
     result = up_func(context, data_dict)
     sql_get_unique_key = '''
         SELECT
@@ -471,8 +473,17 @@ def datastore_info(up_func, context, data_dict):
             AND idx.indisprimary = false
             AND t.relname = %s
         '''
+    # Check if GOOGLE_APPLICATION_CREDENTIALS is set, if so use it
+    google_application_credentials = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', None)
+    log.info("GOOGLE_APPLICATION_CREDENTIALS: {}".format(google_application_credentials))
+    if google_application_credentials:
+        google_application_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
+        credentials = service_account.Credentials.from_service_account_file(google_application_credentials)
     datatore_connection = config['ckan.datastore.write_url']
-    engine = create_engine(datatore_connection).connect()
+    if credentials:
+        engine = create_engine(datatore_connection, credentials=credentials).connect()
+    else:
+        engine = create_engine(datatore_connection).connect()
     key_parts = engine.execute(sql_get_unique_key,
                                               data_dict['id'])
     primary_keys = [x[0] for x in key_parts]
