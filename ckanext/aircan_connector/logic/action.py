@@ -478,7 +478,6 @@ def datastore_info(up_func, context, data_dict):
     log.info("GOOGLE_APPLICATION_CREDENTIALS: {}".format(google_application_credentials))
     credentials = None
     if google_application_credentials:
-        google_application_credentials = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
         credentials = service_account.Credentials.from_service_account_file(google_application_credentials)
     datatore_connection = config['ckan.datastore.write_url']
     if credentials:
