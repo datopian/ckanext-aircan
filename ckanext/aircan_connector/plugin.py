@@ -116,8 +116,8 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         return {
             'aircan_submit': action.aircan_submit,
             'aircan_status': action.aircan_status,
-            'aircan_status_update': action.aircan_status_update,
-            'datastore_info': action.datastore_info
+            'aircan_status_update': action.aircan_status_update
+            #'datastore_info': action.datastore_info
         }
 
 
