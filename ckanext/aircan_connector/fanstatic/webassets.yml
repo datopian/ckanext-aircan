@@ -1,0 +1,9 @@
+aircan-js:
+  output: ckanext-aircan-connector/%(version)s_aircan.js
+  contents:
+    - js/aircan.js
+
+aircan-css:
+  output: ckanext-aircan-connector/%(version)s_aircan.css
+  contents:
+    - css/aircan.css

@@ -51,7 +51,8 @@ class ResourceDataController(MethodView):
             controller='aircan',
             action='resource_data',
             id=id,
-            resource_id=resource_id
+            resource_id=resource_id,
+            res=resource_dict
         )
         
     def get(self, id, resource_id):
@@ -85,6 +86,8 @@ class ResourceDataController(MethodView):
 
         return toolkit.render('resource_data.html',
                         extra_vars={
+                            'res': toolkit.c.resource,
+                            'resource': toolkit.c.resource,
                             'status': aircan_status,
                             'unique_keys': unique_keys
                             })

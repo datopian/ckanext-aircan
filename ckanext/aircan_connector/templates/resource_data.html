@@ -1,7 +1,8 @@
 {% extends "package/resource_edit_base.html" %}
+
 {% import 'macros/form.html' as form %}
 
-{% block subtitle %}{{ h.dataset_display_name(pkg) }} - {{ h.resource_display_name(res) }}{% endblock %}
+{% block subtitle %}{{ h.dataset_display_name(pkg) }}{% endblock %}
 
 {% block primary_content_inner %}
 
@@ -103,7 +104,7 @@
       <p class="muted">{{ _('End of log') }}</p>
     </li>
   </ul>
-  {% resource 'aircan_connector/aircan' %}
+  {% asset 'aircan_connector/aircan-js' %}
 
   {% endif %}
 {% endblock %}
