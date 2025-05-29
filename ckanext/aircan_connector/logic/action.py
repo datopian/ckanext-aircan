@@ -177,8 +177,9 @@ def aircan_submit(context, data_dict):
     schema = ckan_resource.get('schema', {})
 
     try:
-        parsed_dict = json.loads(schema)
-        parsed_dict = ast.literal_eval(schema)
+        str_schema = f"{repr(schema)}"
+        parsed_dict = json.loads(str_schema)
+        parsed_dict = ast.literal_eval(str_schema)
         log.info("Parsed schema: {}".format(parsed_dict))
     except ValueError as e:
         log.error("Failed to parse schema: {}".format(schema))
