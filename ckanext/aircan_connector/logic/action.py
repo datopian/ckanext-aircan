@@ -174,8 +174,7 @@ def aircan_submit(context, data_dict):
     }
     '''
 
-    table_schema = ckan_resource.get('schema', {})
-    schema = f'"{repr(table_schema)}"'
+    schema = ckan_resource.get('schema', {})
 
     try:
         parsed_dict = json.loads(schema)
