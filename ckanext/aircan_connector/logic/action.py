@@ -174,12 +174,12 @@ def aircan_submit(context, data_dict):
     }
     '''
 
-    schema = ckan_resource.get('schema', {})
+    table_schema = ckan_resource.get('schema', {})
+    schema = f'"{repr(table_schema)}"'
 
     try:
-        str_schema = f"{repr(schema)}"
-        parsed_dict = json.loads(str_schema)
-        parsed_dict = ast.literal_eval(str_schema)
+        parsed_dict = json.loads(schema)
+        parsed_dict = ast.literal_eval(schema)
         log.info("Parsed schema: {}".format(parsed_dict))
     except ValueError as e:
         log.error("Failed to parse schema: {}".format(schema))
@@ -218,7 +218,7 @@ def aircan_submit(context, data_dict):
                 "path": ckan_resource.get('url'),
                 "format": ckan_resource.get('format'),
                 "ckan_resource_id": res_id,
-                "schema": json.dumps(schema),
+                "schema": schema,
                 "package_id": ckan_resource.get('package_id'),
                 "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
                 "datastore_unique_keys": datastore_unique_keys,
