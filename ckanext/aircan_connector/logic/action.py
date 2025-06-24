@@ -175,7 +175,13 @@ def aircan_submit(context, data_dict):
     '''
 
     table_schema = ckan_resource.get('schema', {})
-    schema = f'"{repr(table_schema)}"'
+    # Check if schema is a string
+    schema = {}
+    if isinstance(table_schema, str):
+        schema = json.loads(table_schema)
+        schema = f'"{repr(schema)}"'
+    else:
+        schema = f'"{repr(table_schema)}"'
 
     try:
         parsed_dict = json.loads(schema)
