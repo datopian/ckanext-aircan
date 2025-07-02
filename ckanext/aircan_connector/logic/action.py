@@ -182,13 +182,6 @@ def aircan_submit(context, data_dict):
     else:
         schema = table_schema
 
-    try:
-        parsed_dict = json.loads(schema)
-        parsed_dict = ast.literal_eval(schema)
-        log.info("Parsed schema: {}".format(parsed_dict))
-    except ValueError as e:
-        log.error("Failed to parse schema: {}".format(schema))
-
     # create giftless resource file uri to be passed to aircan
     pacakge_name = data_dict['pacakge_name']
     organization_name = data_dict['organization_name']
