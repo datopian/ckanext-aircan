@@ -179,9 +179,8 @@ def aircan_submit(context, data_dict):
     schema = {}
     if isinstance(table_schema, str):
         schema = json.loads(table_schema)
-        schema = f'"{repr(schema)}"'
     else:
-        schema = f'"{repr(table_schema)}"'
+        schema = table_schema
 
     try:
         parsed_dict = json.loads(schema)
@@ -224,7 +223,7 @@ def aircan_submit(context, data_dict):
                 "path": ckan_resource.get('url'),
                 "format": ckan_resource.get('format'),
                 "ckan_resource_id": res_id,
-                "schema": schema,
+                "schema": json.dumps(schema),
                 "package_id": ckan_resource.get('package_id'),
                 "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
                 "datastore_unique_keys": datastore_unique_keys,
