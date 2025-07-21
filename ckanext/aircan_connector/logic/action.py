@@ -178,7 +178,12 @@ def aircan_submit(context, data_dict):
     # Check if schema is a string
     schema = {}
     if isinstance(table_schema, str):
-        schema = json.loads(table_schema)
+        try:
+            schema = json.loads(table_schema)
+        except json.JSONDecodeError:
+            # Handle Python dict string representation
+            import ast
+            schema = ast.literal_eval(table_schema)
     else:
         schema = table_schema
 
