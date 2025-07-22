@@ -102,12 +102,6 @@ def aircan_submit(context, data_dict):
         log.debug("bq_table_name: {}".format(bq_table_name))
         dag_run_id = str(uuid.uuid4())
         
-        try:
-            datastore_unique_keys = get_action('datastore_info')(
-                    context, {'id': res_id}).get('primary_keys', [])
-        except:
-            datastore_unique_keys = []
-
         payload = { 
             "dag_run_id": dag_run_id,
             "conf": {
@@ -118,7 +112,7 @@ def aircan_submit(context, data_dict):
                     "schema": schema,
                     "package_id": ckan_resource.get('package_id'),
                     "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
-                    "datastore_unique_keys": datastore_unique_keys
+                    "datastore_unique_keys": ckan_resource.get('datastore_unique_keys', []),
                 },
                 "ckan_config": {
                     "api_key": ckan_api_key,
