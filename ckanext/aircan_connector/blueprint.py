@@ -84,10 +84,12 @@ class ResourceDataController(MethodView):
             unique_keys = []
 
 
+        res = toolkit.c.resource
+        res['schema'] = None
         return toolkit.render('resource_data.html',
                         extra_vars={
-                            'res': toolkit.c.resource,
-                            'resource': toolkit.c.resource,
+                            'res': res,
+                            'resource': res,
                             'status': aircan_status,
                             'unique_keys': unique_keys
                             })
