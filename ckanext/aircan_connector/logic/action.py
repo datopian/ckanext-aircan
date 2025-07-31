@@ -313,6 +313,7 @@ def aircan_submit_job(payload):
         'message': 'Added to the queue to be processed with run id \"{0}\"'.format(dag_run_id),
         'clear_logs': True
         })
+    return AIRCAN_RESPONSE_AFTER_SUBMIT
 
     #except ValueError:
     #    log.error(NO_SCHEMA_ERROR_MESSAGE)
