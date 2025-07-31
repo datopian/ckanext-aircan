@@ -10,6 +10,7 @@ import logging
 import json
 import uuid
 import datetime
+import ckan.lib.jobs as jobs
 
 from ckan.common import request
 from ckanext.aircan_connector.logic.gcp_handler import GCPHandler
@@ -120,17 +121,8 @@ def get_api_token(user):
         log.error('Failed to generate aircan token')
         log.error(e)
 
-def aircan_submit(context, data_dict):
-    log.info("Submitting resource via Aircan")
-    check_access('aircan_submit', context, data_dict)
-    log.info("Checked access all good")
-    #try:
-    log.info("Uploading to datastore, maybe?")
-    upload_to_datastore = data_dict.get('upload_to_datastore', True)
-    if not upload_to_datastore:
-        log.debug('Skipping upload to datastore as upload_to_datastore is set to False')
-        return
-
+def aircan_submit_job(payload):
+    data_dict = payload['data_dict']
     res_id = data_dict['resource_id']
     ckan_resource = data_dict.get('resource_json', {})
     ckan_resource_url = ckan_resource.get('url')
@@ -195,7 +187,7 @@ def aircan_submit(context, data_dict):
     giftless_bucket = config.get('ckan.giftless.bucket', '')
     external_bucket = config.get('ckan.giftless.external_bucket', False)
     if external_bucket:
-        ckan_resource_url = get_action('get_resource_download_spec')(context, {'resource': ckan_resource})
+        ckan_resource_url = get_action('get_resource_download_spec')({ "ignore_auth": True }, {'resource': ckan_resource})
         if ckan_resource_url.get('href') is None:
             raise Exception('Resource download spec is not available')
         log.info("Download uri: {}".format(ckan_resource_url))
@@ -210,7 +202,7 @@ def aircan_submit(context, data_dict):
     
     try:
         datastore_unique_keys = get_action('datastore_info')(
-                context, {'id': res_id}).get('primary_keys', [])
+            { "ignore_auth": True }, {'id': res_id}).get('primary_keys', [])
     except:
         datastore_unique_keys = []
 
@@ -225,7 +217,7 @@ def aircan_submit(context, data_dict):
                 "package_id": ckan_resource.get('package_id'),
                 "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
                 "datastore_unique_keys": datastore_unique_keys,
-                "editor_user_email" : _get_editor_user_email(context, pacakge_name)
+                "editor_user_email" : data_dict.get('editor_user_email')
             },
             "ckan_config": {
                 "api_key": config.get('ckanext.aircan.api_token'),
@@ -260,7 +252,7 @@ def aircan_submit(context, data_dict):
                 '_datastore_only_resource' in data_dict.get('resource_json')['url']: 
 
             log.info('Dump files are managed with the Datastore API')
-            p.toolkit.get_action('aircan_status_update')(context,{ 
+            p.toolkit.get_action('aircan_status_update')({ "ignore_auth": True },{
                 'dag_run_id': dag_run_id,
                 'resource_id': res_id,
                 'state': 'complete',
@@ -269,7 +261,7 @@ def aircan_submit(context, data_dict):
             })
             return
 
-        aircan_status =  get_action(u'aircan_status')(context, 
+        aircan_status =  get_action(u'aircan_status')({ "ignore_auth": True },
                 {'resource_id': ckan_resource['id']})
         updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
         time_since_last_updated = datetime.datetime.utcnow() - updated
@@ -314,7 +306,7 @@ def aircan_submit(context, data_dict):
         AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
 
     # Update the aircan run status
-    p.toolkit.get_action('aircan_status_update')(context,{ 
+    p.toolkit.get_action('aircan_status_update')({ "ignore_auth": True },{
         'dag_run_id': dag_run_id,
         'resource_id': res_id,
         'state': 'pending',
@@ -328,8 +320,30 @@ def aircan_submit(context, data_dict):
     #except Exception as e:
     #    return {"success": False, "errors": [e]}
 
-    if REACHED_RESOPONSE == True:
-        return AIRCAN_RESPONSE_AFTER_SUBMIT
+
+
+def aircan_submit(context, data_dict):
+    log.info("Submitting resource via Aircan")
+    check_access('aircan_submit', context, data_dict)
+    log.info("Checked access all good")
+    #try:
+    log.info("Uploading to datastore, maybe?")
+    upload_to_datastore = data_dict.get('upload_to_datastore', True)
+    if not upload_to_datastore:
+        log.debug('Skipping upload to datastore as upload_to_datastore is set to False')
+        return
+
+    log.info('Submitting aircan job to CKAN')
+    package_name = data_dict.get('package_name')
+    editor_user_email = _get_editor_user_email(context, package_name)
+    job = jobs.enqueue(aircan_submit, [{
+        'editor_user_email': editor_user_email,
+        'data_dict': data_dict
+    }])
+    return {
+        'success': True,
+        'message': f'Submitted job {job.id} to CKAN, the job will be processed in the background'
+    }
 
 def invoke_gcp(config, payload):
     log.info('Invoking GCP')
