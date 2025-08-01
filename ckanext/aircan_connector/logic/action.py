@@ -337,7 +337,7 @@ def aircan_submit(context, data_dict):
     log.info('Submitting aircan job to CKAN')
     package_name = data_dict.get('package_name')
     editor_user_email = _get_editor_user_email(context, package_name)
-    job = jobs.enqueue(aircan_submit, [{
+    job = jobs.enqueue(aircan_submit_job, [{
         'editor_user_email': editor_user_email,
         'data_dict': data_dict
     }])
