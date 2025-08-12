@@ -192,7 +192,7 @@ def aircan_submit_job(payload):
         giftless_bucket = config.get('ckan.giftless.bucket', '')
         external_bucket = config.get('ckan.giftless.external_bucket', False)
         if external_bucket:
-            ckan_resource_url = get_action('get_resource_download_spec')({ "ignore_auth": True }, {'resource': ckan_resource})
+            ckan_resource_url = payload['ckan_resource_url']
             if ckan_resource_url.get('href') is None:
                 raise Exception('Resource download spec is not available')
             log.info("Download uri: {}".format(ckan_resource_url))
@@ -342,9 +342,12 @@ def aircan_submit(context, data_dict):
     log.info('Submitting aircan job to CKAN')
     package_name = data_dict.get('package_name')
     editor_user_email = _get_editor_user_email(context, package_name)
+    ckan_resource = data_dict.get('resource_json', {})
+    ckan_resource_url = get_action('get_resource_download_spec')(context, {'resource': ckan_resource})
     job = jobs.enqueue(aircan_submit_job, [{
         'editor_user_email': editor_user_email,
-        'data_dict': data_dict
+        'data_dict': data_dict,
+        'ckan_resource_url': ckan_resource_url
     }])
     log.info(f'Submitted job {job.id} to CKAN, the job will be processed in the background')
     return {
