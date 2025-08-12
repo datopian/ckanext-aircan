@@ -47,6 +47,7 @@ class ResourceDataController(MethodView):
         except logic.ValidationError:
             pass
 
+        resource_dict['schema'] = None
         return toolkit.h.redirect_to(
             controller='aircan',
             action='resource_data',

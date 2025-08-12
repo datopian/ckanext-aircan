@@ -10,6 +10,7 @@ import logging
 import json
 import uuid
 import datetime
+import ckan.lib.jobs as jobs
 
 from ckan.common import request
 from ckanext.aircan_connector.logic.gcp_handler import GCPHandler
@@ -21,6 +22,9 @@ import boto3
 from botocore.client import Config
 import ckan.lib.uploader as uploader
 import os
+from ckan.config.middleware import make_app
+from ckan.lib.helpers import _get_auto_flask_context  # noqa  we need this for Flask request context
+from contextlib import contextmanager
 
 REACHED_RESOPONSE  = False
 AIRCAN_RESPONSE_AFTER_SUBMIT = None
@@ -120,6 +124,210 @@ def get_api_token(user):
         log.error('Failed to generate aircan token')
         log.error(e)
 
+def aircan_submit_job(payload):
+    log.info('Starting aircan_submit_job')
+    with app_context():
+        data_dict = payload['data_dict']
+        res_id = data_dict['resource_id']
+        ckan_resource = data_dict.get('resource_json', {})
+        ckan_resource_url = ckan_resource.get('url')
+        log.info("ckan_resource_url: {}".format(ckan_resource_url))
+        log.info("CKAN RESOURCE: {}".format(ckan_resource))
+        ckan_resource_name = ckan_resource.get('name')
+        '''Sample schema structure we are expecting to receive frfom ckan_resource.get('schema')
+            schema = {
+                "fields": [
+                    {
+                        "name": "FID",
+                        "title": "FID",
+                        "type": "number",
+                        "description": "FID`"
+                    },
+                    {
+                        "name": "MktRF",
+                        "title": "MktRF",
+                        "type": "number",
+                        "description": "MktRF`"
+                    },
+                    {
+                        "name": "SMB",
+                        "title": "SMB",
+                        "type": "number",
+                        "description": "SMB`"
+                    },
+                    {
+                        "name": "HML",
+                        "title": "HML",
+                        "type": "number",
+                        "description": "HML`"
+                    },
+                    {
+                        "name": "RF",
+                        "title": "RF",
+                        "type": "number",
+                        "description": "RF`"
+                    }
+                ]
+        }
+        '''
+
+        table_schema = ckan_resource.get('schema', {})
+        # Check if schema is a string
+        schema = {}
+        if isinstance(table_schema, str):
+            try:
+                schema = json.loads(table_schema)
+            except json.JSONDecodeError:
+                # Handle Python dict string representation
+                import ast
+                schema = ast.literal_eval(table_schema)
+        else:
+            schema = table_schema
+
+        # create giftless resource file uri to be passed to aircan
+        pacakge_name = data_dict['pacakge_name']
+        organization_name = data_dict['organization_name']
+        resource_hash = data_dict['resource_hash']
+        log.info(f"Resource hash: {resource_hash}")
+        giftless_bucket = config.get('ckan.giftless.bucket', '')
+        external_bucket = config.get('ckan.giftless.external_bucket', False)
+        if external_bucket:
+            ckan_resource_url = payload['ckan_resource_url']
+            if ckan_resource_url.get('href') is None:
+                raise Exception('Resource download spec is not available')
+            log.info("Download uri: {}".format(ckan_resource_url))
+            upload_to_gcp(ckan_resource_url.get('href'), organization_name, pacakge_name, resource_hash)
+            log.info("Uploaded to gcp")
+        gcs_uri = 'gs://%s/%s/%s/%s' % (giftless_bucket, organization_name, pacakge_name, resource_hash)
+        log.debug("gcs_uri: {}".format(gcs_uri))
+
+        bq_table_name = ckan_resource.get('bq_table_name')
+        log.debug("bq_table_name: {}".format(bq_table_name))
+        dag_run_id = str(uuid.uuid4())
+        
+        try:
+            datastore_unique_keys = get_action('datastore_info')(
+                { "ignore_auth": True }, {'id': res_id}).get('primary_keys', [])
+        except:
+            datastore_unique_keys = []
+
+        payload = { 
+            "dag_run_id": dag_run_id,
+            "conf": {
+                "resource": {
+                    "path": ckan_resource.get('url'),
+                    "format": ckan_resource.get('format'),
+                    "ckan_resource_id": res_id,
+                    "schema": json.dumps(schema),
+                    "package_id": ckan_resource.get('package_id'),
+                    "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
+                    "datastore_unique_keys": datastore_unique_keys,
+                    "editor_user_email" : data_dict.get('editor_user_email')
+                },
+                "ckan_config": {
+                    "api_key": config.get('ckanext.aircan.api_token'),
+                    "site_url": config.get('ckan.site_url'),
+                    'ckan_s3_access_key_id': config.get('ckanext.s3filestore.aws_access_key_id', ''),
+                    'ckan_s3_secret_access_key': config.get('ckanext.s3filestore.aws_secret_access_key', ''),
+                    'ckan_s3_bucket_name': config.get('ckanext.s3filestore.aws_bucket_name', ''),
+                    'ckan_s3_storage_path': config.get('ckanext.s3filestore.aws_storage_path', ''),
+                    'ckan_s3_host_name': config.get('ckanext.s3filestore.host_name', ''),
+                    'ckan_s3_region_name': config.get('ckanext.s3filestore.region_name', ''),
+                    'ckan_s3_signature_version': config.get('ckanext.s3filestore.signature_version','s3v4'),
+                    "ckan_datastore_postgres_url": config.get('ckan.datastore.write_url'),
+                    "aircan_load_with_postgres_copy": config.get('ckanext.aircan.load_with_postgres_copy', False),
+                    "aircan_datastore_chunk_insert_rows_size": config.get('ckanext.aircan.datastore_chunk_insert_rows_size', 250),
+                    "aircan_append_or_update_datastore": config.get('ckanext.aircan.append_or_update_datastore', False),
+                    "aircan_notification_to": config.get('ckanext.aircan.notification_to', 'editor'),
+                    "aircan_notificaton_from": config.get('ckanext.aircan.notification_from', config.get('smtp.mail_from')),
+                    "aircan_notification_subject": config.get('ckanext.aircan.notification_subject', '[Alert] Data ingestion has failed.')
+                },
+                "big_query": {
+                    "gcs_uri": gcs_uri,
+                    "bq_project_id": config.get('ckanext.bigquery.project', 'NA'),
+                    "bq_dataset_id": config.get('ckanext.bigquery.dataset', 'NA'),
+                    "bq_table_name": bq_table_name
+                },
+                "output_bucket": str(date.today())
+            }
+        }
+        try:
+            # Datastore type resource shouldn't trigger airflow DAG.   
+            if data_dict.get('resource_json')['url_type'] == 'datastore' or \
+                    '_datastore_only_resource' in data_dict.get('resource_json')['url']: 
+
+                log.info('Dump files are managed with the Datastore API')
+                p.toolkit.get_action('aircan_status_update')({ "ignore_auth": True },{
+                    'dag_run_id': dag_run_id,
+                    'resource_id': res_id,
+                    'state': 'complete',
+                    'message': 'Dump files are managed with the Datastore API',
+                    'clear_logs': True
+                })
+                return
+
+            aircan_status =  get_action(u'aircan_status')({ "ignore_auth": True },
+                    {'resource_id': ckan_resource['id']})
+            updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
+            time_since_last_updated = datetime.datetime.utcnow() - updated
+            wait_till = datetime.timedelta(minutes=int(10))
+            # wait for the next 10 minutes if already submitted.
+            if aircan_status.get('status', '') in ['pending', 'progress'] and  \
+                    time_since_last_updated < wait_till:
+                status_msg = 'A pending task was found {0} for this resource, so \
+                                skipping this duplicate task'.format(ckan_resource['id'])
+                log.info(status_msg)
+                h.flash_error(status_msg)
+                return False
+        except:
+            pass
+
+        log.debug("payload: {}".format(payload))
+        global REACHED_RESOPONSE
+        REACHED_RESOPONSE = True
+        global AIRCAN_RESPONSE_AFTER_SUBMIT 
+
+        if config.get('ckan.airflow.cloud','local') != "GCP":
+            ckan_airflow_endpoint_url = config.get('ckan.airflow.url')
+            log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
+            response = requests.post(ckan_airflow_endpoint_url,
+                                     auth=requests.auth.HTTPBasicAuth( 
+                                        config['ckan.airflow.username'], 
+                                        config['ckan.airflow.password']),
+                                     data=json.dumps(payload),
+                                     headers={'Content-Type': 'application/json',
+                                              'Cache-Control': 'no-cache'})
+            log.info(response.text)
+            response.raise_for_status()
+            log.info('AirCan Load completed')
+            
+            AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": response.json()}
+        else:
+            log.info("Invoking Airflow on Google Cloud Composer")
+            dag_name = request.params.get('dag_name')
+            if dag_name:
+                config['ckan.airflow.cloud.dag_name'] = dag_name
+            gcp_response = invoke_gcp(config, payload)
+            AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
+
+        # Update the aircan run status
+        p.toolkit.get_action('aircan_status_update')({ "ignore_auth": True },{
+            'dag_run_id': dag_run_id,
+            'resource_id': res_id,
+            'state': 'pending',
+            'message': 'Added to the queue to be processed with run id \"{0}\"'.format(dag_run_id),
+            'clear_logs': True
+            })
+        return AIRCAN_RESPONSE_AFTER_SUBMIT
+
+        #except ValueError:
+        #    log.error(NO_SCHEMA_ERROR_MESSAGE)
+        #    h.flash_error(NO_SCHEMA_ERROR_MESSAGE.format(ckan_resource_url , ckan_resource_name),  allow_html=True)
+        #except Exception as e:
+        #    return {"success": False, "errors": [e]}
+
+
+
 def aircan_submit(context, data_dict):
     log.info("Submitting resource via Aircan")
     check_access('aircan_submit', context, data_dict)
@@ -131,205 +339,21 @@ def aircan_submit(context, data_dict):
         log.debug('Skipping upload to datastore as upload_to_datastore is set to False')
         return
 
-    res_id = data_dict['resource_id']
+    log.info('Submitting aircan job to CKAN')
+    package_name = data_dict.get('package_name')
+    editor_user_email = _get_editor_user_email(context, package_name)
     ckan_resource = data_dict.get('resource_json', {})
-    ckan_resource_url = ckan_resource.get('url')
-    log.info("ckan_resource_url: {}".format(ckan_resource_url))
-    log.info("CKAN RESOURCE: {}".format(ckan_resource))
-    ckan_resource_name = ckan_resource.get('name')
-    '''Sample schema structure we are expecting to receive frfom ckan_resource.get('schema')
-        schema = {
-            "fields": [
-                {
-                    "name": "FID",
-                    "title": "FID",
-                    "type": "number",
-                    "description": "FID`"
-                },
-                {
-                    "name": "MktRF",
-                    "title": "MktRF",
-                    "type": "number",
-                    "description": "MktRF`"
-                },
-                {
-                    "name": "SMB",
-                    "title": "SMB",
-                    "type": "number",
-                    "description": "SMB`"
-                },
-                {
-                    "name": "HML",
-                    "title": "HML",
-                    "type": "number",
-                    "description": "HML`"
-                },
-                {
-                    "name": "RF",
-                    "title": "RF",
-                    "type": "number",
-                    "description": "RF`"
-                }
-            ]
+    ckan_resource_url = get_action('get_resource_download_spec')(context, {'resource': ckan_resource})
+    job = jobs.enqueue(aircan_submit_job, [{
+        'editor_user_email': editor_user_email,
+        'data_dict': data_dict,
+        'ckan_resource_url': ckan_resource_url
+    }])
+    log.info(f'Submitted job {job.id} to CKAN, the job will be processed in the background')
+    return {
+        'success': True,
+        'message': f'Submitted job {job.id} to CKAN, the job will be processed in the background'
     }
-    '''
-
-    table_schema = ckan_resource.get('schema', {})
-    # Check if schema is a string
-    schema = {}
-    if isinstance(table_schema, str):
-        try:
-            schema = json.loads(table_schema)
-        except json.JSONDecodeError:
-            # Handle Python dict string representation
-            import ast
-            schema = ast.literal_eval(table_schema)
-    else:
-        schema = table_schema
-
-    # create giftless resource file uri to be passed to aircan
-    pacakge_name = data_dict['pacakge_name']
-    organization_name = data_dict['organization_name']
-    resource_hash = data_dict['resource_hash']
-    log.info(f"Resource hash: {resource_hash}")
-    giftless_bucket = config.get('ckan.giftless.bucket', '')
-    external_bucket = config.get('ckan.giftless.external_bucket', False)
-    if external_bucket:
-        ckan_resource_url = get_action('get_resource_download_spec')(context, {'resource': ckan_resource})
-        if ckan_resource_url.get('href') is None:
-            raise Exception('Resource download spec is not available')
-        log.info("Download uri: {}".format(ckan_resource_url))
-        upload_to_gcp(ckan_resource_url.get('href'), organization_name, pacakge_name, resource_hash)
-        log.info("Uploaded to gcp")
-    gcs_uri = 'gs://%s/%s/%s/%s' % (giftless_bucket, organization_name, pacakge_name, resource_hash)
-    log.debug("gcs_uri: {}".format(gcs_uri))
-
-    bq_table_name = ckan_resource.get('bq_table_name')
-    log.debug("bq_table_name: {}".format(bq_table_name))
-    dag_run_id = str(uuid.uuid4())
-    
-    try:
-        datastore_unique_keys = get_action('datastore_info')(
-                context, {'id': res_id}).get('primary_keys', [])
-    except:
-        datastore_unique_keys = []
-
-    payload = { 
-        "dag_run_id": dag_run_id,
-        "conf": {
-            "resource": {
-                "path": ckan_resource.get('url'),
-                "format": ckan_resource.get('format'),
-                "ckan_resource_id": res_id,
-                "schema": json.dumps(schema),
-                "package_id": ckan_resource.get('package_id'),
-                "datastore_append_or_update": ckan_resource.get('datastore_append_or_update', False),
-                "datastore_unique_keys": datastore_unique_keys,
-                "editor_user_email" : _get_editor_user_email(context, pacakge_name)
-            },
-            "ckan_config": {
-                "api_key": config.get('ckanext.aircan.api_token'),
-                "site_url": config.get('ckan.site_url'),
-                'ckan_s3_access_key_id': config.get('ckanext.s3filestore.aws_access_key_id', ''),
-                'ckan_s3_secret_access_key': config.get('ckanext.s3filestore.aws_secret_access_key', ''),
-                'ckan_s3_bucket_name': config.get('ckanext.s3filestore.aws_bucket_name', ''),
-                'ckan_s3_storage_path': config.get('ckanext.s3filestore.aws_storage_path', ''),
-                'ckan_s3_host_name': config.get('ckanext.s3filestore.host_name', ''),
-                'ckan_s3_region_name': config.get('ckanext.s3filestore.region_name', ''),
-                'ckan_s3_signature_version': config.get('ckanext.s3filestore.signature_version','s3v4'),
-                "ckan_datastore_postgres_url": config.get('ckan.datastore.write_url'),
-                "aircan_load_with_postgres_copy": config.get('ckanext.aircan.load_with_postgres_copy', False),
-                "aircan_datastore_chunk_insert_rows_size": config.get('ckanext.aircan.datastore_chunk_insert_rows_size', 250),
-                "aircan_append_or_update_datastore": config.get('ckanext.aircan.append_or_update_datastore', False),
-                "aircan_notification_to": config.get('ckanext.aircan.notification_to', 'editor'),
-                "aircan_notificaton_from": config.get('ckanext.aircan.notification_from', config.get('smtp.mail_from')),
-                "aircan_notification_subject": config.get('ckanext.aircan.notification_subject', '[Alert] Data ingestion has failed.')
-            },
-            "big_query": {
-                "gcs_uri": gcs_uri,
-                "bq_project_id": config.get('ckanext.bigquery.project', 'NA'),
-                "bq_dataset_id": config.get('ckanext.bigquery.dataset', 'NA'),
-                "bq_table_name": bq_table_name
-            },
-            "output_bucket": str(date.today())
-        }
-    }
-    try:
-        # Datastore type resource shouldn't trigger airflow DAG.   
-        if data_dict.get('resource_json')['url_type'] == 'datastore' or \
-                '_datastore_only_resource' in data_dict.get('resource_json')['url']: 
-
-            log.info('Dump files are managed with the Datastore API')
-            p.toolkit.get_action('aircan_status_update')(context,{ 
-                'dag_run_id': dag_run_id,
-                'resource_id': res_id,
-                'state': 'complete',
-                'message': 'Dump files are managed with the Datastore API',
-                'clear_logs': True
-            })
-            return
-
-        aircan_status =  get_action(u'aircan_status')(context, 
-                {'resource_id': ckan_resource['id']})
-        updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
-        time_since_last_updated = datetime.datetime.utcnow() - updated
-        wait_till = datetime.timedelta(minutes=int(10))
-        # wait for the next 10 minutes if already submitted.
-        if aircan_status.get('status', '') in ['pending', 'progress'] and  \
-                time_since_last_updated < wait_till:
-            status_msg = 'A pending task was found {0} for this resource, so \
-                            skipping this duplicate task'.format(ckan_resource['id'])
-            log.info(status_msg)
-            h.flash_error(status_msg)
-            return False
-    except:
-        pass
-
-    log.debug("payload: {}".format(payload))
-    global REACHED_RESOPONSE
-    REACHED_RESOPONSE = True
-    global AIRCAN_RESPONSE_AFTER_SUBMIT 
-
-    if config.get('ckan.airflow.cloud','local') != "GCP":
-        ckan_airflow_endpoint_url = config.get('ckan.airflow.url')
-        log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
-        response = requests.post(ckan_airflow_endpoint_url,
-                                 auth=requests.auth.HTTPBasicAuth( 
-                                    config['ckan.airflow.username'], 
-                                    config['ckan.airflow.password']),
-                                 data=json.dumps(payload),
-                                 headers={'Content-Type': 'application/json',
-                                          'Cache-Control': 'no-cache'})
-        log.info(response.text)
-        response.raise_for_status()
-        log.info('AirCan Load completed')
-        
-        AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": response.json()}
-    else:
-        log.info("Invoking Airflow on Google Cloud Composer")
-        dag_name = request.params.get('dag_name')
-        if dag_name:
-            config['ckan.airflow.cloud.dag_name'] = dag_name
-        gcp_response = invoke_gcp(config, payload)
-        AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
-
-    # Update the aircan run status
-    p.toolkit.get_action('aircan_status_update')(context,{ 
-        'dag_run_id': dag_run_id,
-        'resource_id': res_id,
-        'state': 'pending',
-        'message': 'Added to the queue to be processed with run id \"{0}\"'.format(dag_run_id),
-        'clear_logs': True
-        })
-
-    #except ValueError:
-    #    log.error(NO_SCHEMA_ERROR_MESSAGE)
-    #    h.flash_error(NO_SCHEMA_ERROR_MESSAGE.format(ckan_resource_url , ckan_resource_name),  allow_html=True)
-    #except Exception as e:
-    #    return {"success": False, "errors": [e]}
-
-    if REACHED_RESOPONSE == True:
-        return AIRCAN_RESPONSE_AFTER_SUBMIT
 
 def invoke_gcp(config, payload):
     log.info('Invoking GCP')
@@ -484,3 +508,12 @@ def datastore_info(up_func, context, data_dict):
         'primary_keys': primary_keys
     })
     return result
+
+@contextmanager
+def app_context():
+    context = _get_auto_flask_context()
+    try:
+        context.push()
+        yield context
+    finally:
+        context.pop()
