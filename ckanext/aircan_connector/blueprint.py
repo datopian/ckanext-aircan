@@ -109,7 +109,8 @@ class ResourceUploadConfigController(MethodView):
         
             resource_dict = {
                 'id': resource_id,
-                'datastore_append_or_update': boolean_validator(datastore_append_or_update, {})
+                'datastore_append_or_update': boolean_validator(datastore_append_or_update, {}),
+                'datastore_unique_keys': datastore_unique_keys or [],
                 }
 
             toolkit.c.resource = toolkit.get_action('resource_patch')(context, resource_dict) 
