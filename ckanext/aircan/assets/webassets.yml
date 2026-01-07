@@ -1,0 +1,14 @@
+# aircan-js:
+#   filter: rjsmin
+#   output: ckanext-aircan/%(version)s-aircan.js
+#   contents:
+#     - js/aircan.js
+#   extra:
+#     preload:
+#       - base/main
+
+# aircan-css:
+#   filter: cssrewrite
+#   output: ckanext-aircan/%(version)s-aircan.css
+#   contents:
+#     - css/aircan.css

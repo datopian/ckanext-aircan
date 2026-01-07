@@ -1,134 +1,123 @@
+[![Tests](https://github.com/Datopian/ckanext-aircan/workflows/Tests/badge.svg?branch=main)](https://github.com/Datopian/ckanext-aircan/actions)
+
 # ckanext-aircan
 
-A CKAN extension for integrating the [AirFlow-based AirCan Data Factory into CKAN][aircan]. Specifically, this extension provides:
+**TODO:** Put a description of your extension here:  What does it do? What features does it have? Consider including some screenshots or embedding a video!
 
-[aircan]: https://tech.datopian.com/flows/#ckan-v3
 
-* New APIs in CKAN for triggering and monitoring workflows (DAGs) in AirFlow
-* Hooking key events in CKAN into the AirFlow instance. Specifically, resource creation and update trigger DAGs in AirFlow to load resource data into the DataStore. See https://tech.datopian.com/load/#ckan-v3
+## Requirements
+
+**TODO:** For example, you might want to mention here which versions of CKAN this
+extension works with.
+
+If your extension works across different versions you can add the following table:
+
+Compatibility with core CKAN versions:
+
+| CKAN version    | Compatible?   |
+| --------------- | ------------- |
+| 2.6 and earlier | not tested    |
+| 2.7             | not tested    |
+| 2.8             | not tested    |
+| 2.9             | not tested    |
+
+Suggested values:
+
+* "yes"
+* "not tested" - I can't think of a reason why it wouldn't work
+* "not yet" - there is an intention to get it working
+* "no"
+
 
 ## Installation
 
-### Basic Setup
+**TODO:** Add any additional install steps to the list below.
+   For example installing any non-Python dependencies or adding any required
+   config settings.
 
-There are two potential cases:
+To install ckanext-aircan:
 
-* Docker for Deployment: Install this extension in the usual way, see https://tech.datopian.com/ckan/install-extension.html
-* Local Development Install manually via cloning the desired commit into the docker-ckan/src directory: `git@github.com:datopian/ckanext-aircan.git`
+1. Activate your CKAN virtual environment, for example:
 
-### Configuration
+     . /usr/lib/ckan/default/bin/activate
 
-* Enable the extension in CKAN by adding the plugin `aircan_connector` to `CKAN__PLUGINS` list in your`.env`. Make sure to disable `datapusher` and `xloader` if you have them there as AirCan replaces them.
-* Add details of the AirFlow instance -- details below for Local case and Cloud case
+2. Clone the source and install it on the virtualenv
 
-### Local Airflow instance
- 
-* In your`.env` file add  `CKAN__AIRFLOW__URL` according to [Apache AirFlow REST API Reference](https://airflow.apache.org/docs/stable/rest-api-ref#post--api-experimental-dags--DAG_ID--dag_runs). If you are running CKAN in a Docker container, make sure to specify the Airflow URL with `host.docker.internal` instead of `localhost`: `CKAN__AIRFLOW__URL=http://host.docker.internal:8080/api/experimental/dags/ckan_api_load_multiple_steps/dag_runs`. Also notice Airflow requires, by default, the endpoint `api/experimental/dags/DAG_ID` for API access.
-* Add Airflow admin username and password for authorization:
-  `CKAN__AIRFLOW__USERNAME=airflow_amin_username` and `CKAN__AIRFLOW__PASSWORD=airflow_admin_password`
-* Also in your `.env` file, specify a temporary directory for files: `CKAN__AIRFLOW__STORAGE_PATH=/tmp/` and `CKAN__AIRFLOW__CLOUD=local`. 
+    git clone https://github.com/Datopian/ckanext-aircan.git
+    cd ckanext-aircan
+    pip install -e .
+	pip install -r requirements.txt
 
-### Airflow instance on Google Composer
+3. Add `aircan` to the `ckan.plugins` setting in your CKAN
+   config file (by default the config file is located at
+   `/etc/ckan/default/ckan.ini`).
 
-Assuming you already have a Google Cloud Composer properly set up, it is possible to trigger a DAG on GoogleCloud Platform following these steps:
+4. Restart CKAN. For example if you've deployed CKAN with Apache on Ubuntu:
 
-* Download your credentials file (a JSON file) from Google Cloud Platform. Convert it to a single-line JSON.
-* Set up the following environment variables on your `.env` file:
-
-  ```bash
-  CKAN__AIRFLOW__CLOUD=GCP # this line activates the integration with GCP
-  CKAN__AIRFLOW__CLOUD__PROJECT_ID=YOUR_PROJECT_ID_ON_COMPOSER
-  CKAN__AIRFLOW__CLOUD__LOCATION=us-east1_OR_OTHER
-  CKAN__AIRFLOW__CLOUD__COMPOSER_ENVIRONMENT=NAME_OF_COMPOSER_ENVIRONMENT
-  CKAN__AIRFLOW__CLOUD__WEB_UI_ID=ID_FROM_AIRFLOW_UI_ON_COMPOSER
-  CKAN__AIRFLOW__CLOUD__GOOGLE_APPLICATION_CREDENTIALS={ YOUR SINGLE LINE CREDENTIALS JSON FILE }
-  ``` 
-
-## Getting Started
-
-### Triggering a Workflow (DAG)
-
-Make a request to `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`, specifying your `CKAN_API_KEY` on the header and send the following information on the body of the request, replacing the values accordingly:
-
-```json
-{
-  "package_id": "YOUR_PACKAGE_ID",
-  "url":  "http://url.for.your.resource.com",
-  "description": "This is the best resource ever!" ,
-  "schema": {
-    "fields":  [
-          {
-            "name": "FID",
-            "type": "int",
-            "format": "default"
-          },
-          {
-            "name": "another-field",
-            "type": "float",
-            "format": "default"
-          }
-        ]
-  }
-}
-```
-
-Replace `dag_name` with the DAG you want to invoke, for example, `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=ckan_api_load_gcp`. This will trigger the DAG `ckan_api_load_gcp`.
-
-NB: the DAG `ckan_api_load_gcp` is designed for Google Cloud Composer AirFlow instance and will load a resource into the DataStore.
-
-The endpoint `http://YOUR-CKAN:5000/api/3/action/resource_create` produces the same effect of `http://YOUR-CKAN:5000/api/3/action/aircan_submit?dag_name=DAG_NAME`. Make sure you set up an extra variable on your `.env` file specifying the DAG you want to trigger:
-
-```
-# .env
-# all other variables
-CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER
-```
-## For CKAN Datastore data loader dag
-
-* Add `ckanext.aircan.load_with_postgres_copy=True` env to load with postgres copy loader. By default it loads with datastore API. 
-* Add `ckanext.aircan.datastore_chunk_insert_rows_size=300` env variable to configure number of records to send a request to datastore. Default 250 rows.
-* addd `append_or_update_datastore = true` if new data schema matches with old schema append or update data, otherwise create new table
-* add `ckanext.aircan.enable_datastore_upload_configuration=true` to enable the upload configuration UI option.
-* add `ckanext.aircan.notification_to = author, maintainer, editor, someone@gmail.com` failure email notification sent to. 
-* add `ckanext.aircan.notification_from = sender@gmail.com` failure notification from email.
-* add `ckanext.aircan.notification_subject` configure notification subject.
+     sudo service apache2 reload
 
 
-### Update aircan run status
- The `aircan_status_update` API can be use to store or update the run status for given resource. It accepts the POST request with authorized user.
-```json
-{ 
-    "resource_id": "a4a520aa-c790-4b53-93aa-de61e1a2813c",
-    "state": "progress",
-    "message":"Pusing dataset records.",
-    "dag_run_id":"394a1f0f-d8b3-47f2-9a51-08732349b785",
-    "error": {
-        "message" : "Failed to push data records."
-    }
-}
-```
+## Config settings
 
-### Retrieving aircan run status 
- Use `aircan_status` API to get aircan run status for given resource providing resource id.
- eg.
-  `http://YOUR-CKAN:5000/api/3/action/aircan_status`
+None at present
 
-```json
-{
-  "resource_id": "a4a520aa-c790-4b53-93aa-de61e1a2813c"
-}
-```
+**TODO:** Document any optional config settings here. For example:
 
-# Tests with Cypress
+	# The minimum number of hours to wait before re-checking a resource
+	# (optional, default: 24).
+	ckanext.aircan.some_setting = some_default_value
 
-Test the aircan-connector with cypress.
 
-## Installation
+## Developer installation
 
-`npm install`
+To install ckanext-aircan for development, activate your CKAN virtualenv and
+do:
 
-## Running
+    git clone https://github.com/Datopian/ckanext-aircan.git
+    cd ckanext-aircan
+    pip install -e .
+    pip install -r dev-requirements.txt
 
-Opens up the cypress app and you can choose the specs to run.
 
-`npm test`
+## Tests
+
+To run the tests, do:
+
+    pytest --ckan-ini=test.ini
+
+
+## Releasing a new version of ckanext-aircan
+
+If ckanext-aircan should be available on PyPI you can follow these steps to publish a new version:
+
+1. Update the version number in the `pyproject.toml` file. See [PEP 440](http://legacy.python.org/dev/peps/pep-0440/#public-version-identifiers) for how to choose version numbers.
+
+2. Make sure you have the latest version of necessary packages:
+
+    pip install --upgrade setuptools wheel twine
+
+3. Create a source and binary distributions of the new version:
+
+       python -m build && twine check dist/*
+
+   Fix any errors you get.
+
+4. Upload the source distribution to PyPI:
+
+       twine upload dist/*
+
+5. Commit any outstanding changes:
+
+       git commit -a
+       git push
+
+6. Tag the new release of the project on GitHub with the version number from
+   the `setup.py` file. For example if the version number in `setup.py` is
+   0.0.1 then do:
+
+       git tag 0.0.1
+       git push --tags
+
+## License
+
+[AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html)

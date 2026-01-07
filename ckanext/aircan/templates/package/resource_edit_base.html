@@ -1,0 +1,5 @@
+{% ckan_extends %}
+
+{% block inner_primary_nav %}
+    {{ h.build_nav_icon('aircan.resource_pipeline', _('Data Pipeline'), id=pkg.name, resource_id=res.id, icon='database') }}
+{% endblock %}

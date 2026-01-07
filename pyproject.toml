@@ -1,0 +1,40 @@
+[project]
+name = "ckanext-aircan"
+version = "0.0.1"
+description = "The custom extension for notifying(triggering) the Airflow DAG about the data to be uploaded to DataStore"
+readme = "README.md"
+authors = [
+    {name = "Sagar Ghimire", email = "sagar.ghimire@datopian.com"}
+]
+license = {text = "AGPL"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+
+keywords = [ "CKAN", ]
+dependencies = [
+    "google-auth>=2.46.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Datopian/ckanext-aircan"
+
+[project.entry-points."ckan.plugins"]
+aircan = "ckanext.aircan.plugin:AircanPlugin"
+
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+        "ignore::sqlalchemy.exc.SADeprecationWarning",
+        "ignore::sqlalchemy.exc.SAWarning",
+        "ignore::DeprecationWarning",
+]
+addopts = "--ckan-ini test.ini"
