@@ -14,7 +14,6 @@ DEFAULT_FORMATS = [
     "application/vnd.oasis.opendocument.spreadsheet",
 ]
 
-
 def allowed_formats(format_):
     """Return True if `format_` is in allowed formats."""
     cfg = tk.config.get("ckanext.aircan.formats")

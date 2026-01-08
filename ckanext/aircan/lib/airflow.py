@@ -1,5 +1,3 @@
-
-
 import logging
 import uuid
 import json
@@ -13,6 +11,7 @@ from google.oauth2 import service_account
 import ckan.plugins.toolkit as tk
 
 log = logging.getLogger(__name__)
+
 
 class AirflowClient:
     """
@@ -28,6 +27,7 @@ class AirflowClient:
         self.server_type = (
             tk.config.get("ckanext.aircan.server", "local") or "local"
         ).lower()
+        self.api_version = tk.config.get("ckanext.aircan.api_version", "v2")
         self.timeout = int(tk.config.get("ckanext.aircan.timeout", 90) or 90)
         self.dag_id = tk.config.get("ckanext.aircan.dag_id")
 
@@ -98,21 +98,16 @@ class AirflowClient:
                 raise RuntimeError("GCP session not initialized")
             return self._authed_session.request(method, url, **kwargs)
 
-        # local token-based auth
         headers = kwargs.pop("headers", {}) or {}
-        if not self._access_token:
-            self._login_local()
-        headers["Authorization"] = f"Bearer {self._access_token}"
-        kwargs["headers"] = headers
-
-        resp = requests.request(method, url, **kwargs)
-
-        # Token may be expired -> refresh once on 401
-        if resp.status_code == 401:
-            self._login_local()
+        
+        if self.api_version == "v2":
+            if not self._access_token:
+                self._login_local()
             headers["Authorization"] = f"Bearer {self._access_token}"
             kwargs["headers"] = headers
-            resp = requests.request(method, url, **kwargs)
+        else:
+            kwargs["auth"] = requests.auth.HTTPBasicAuth(self.username, self.password)
+        resp = requests.request(method, url, **kwargs)
 
         return resp
 
@@ -132,7 +127,9 @@ class AirflowClient:
             "logical_date": logical_date.isoformat().replace("+00:00", "Z"),
         }
 
-        resp = self.request("POST", f"/api/v2/dags/{self.dag_id}/dagRuns", json=payload)
+        resp = self.request(
+            "POST", f"/api/{self.api_version}/dags/{self.dag_id}/dagRuns", json=payload
+        )
 
         if resp.status_code in (200, 201):
             data = resp.json()
@@ -149,6 +146,8 @@ class AirflowClient:
         return data
 
     def get_dag_run(self, dag_run_id: str) -> Dict[str, Any]:
-        resp = self.request("GET", f"/api/v2/dags/{self.dag_id}/dagRuns/{dag_run_id}")
+        resp = self.request(
+            "GET", f"/api/{self.api_version}/dags/{self.dag_id}/dagRuns/{dag_run_id}"
+        )
         resp.raise_for_status()
         return resp.json()
