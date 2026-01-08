@@ -1,52 +1,35 @@
 [![Tests](https://github.com/Datopian/ckanext-aircan/workflows/Tests/badge.svg?branch=main)](https://github.com/Datopian/ckanext-aircan/actions)
 
 # ckanext-aircan
+A CKAN extension that integrates Airflow orchestrating with CKAN. This extension allows you to trigger, monitor, and display the status and logs of Aiflow data ingestion flows directly from the CKAN interface.
 
-**TODO:** Put a description of your extension here:  What does it do? What features does it have? Consider including some screenshots or embedding a video!
 
+## Features
+- **Trigger Prefect Flows**: Automatically or manually submit CKAN resources for processing via Prefect.
+- **Status & Logs**: View the current status and logs of Prefect flow runs associated with CKAN resources.
 
 ## Requirements
-
-**TODO:** For example, you might want to mention here which versions of CKAN this
-extension works with.
-
-If your extension works across different versions you can add the following table:
-
-Compatibility with core CKAN versions:
-
-| CKAN version    | Compatible?   |
-| --------------- | ------------- |
-| 2.6 and earlier | not tested    |
-| 2.7             | not tested    |
-| 2.8             | not tested    |
-| 2.9             | not tested    |
-
-Suggested values:
-
-* "yes"
-* "not tested" - I can't think of a reason why it wouldn't work
-* "not yet" - there is an intention to get it working
-* "no"
-
+- CKAN 2.11 or later (not tested on earlier versions)
+- Python 3.8+
+- A running [Airflow](https://airflow.apache.org/) server or Prefect Cloud
 
 ## Installation
 
 **TODO:** Add any additional install steps to the list below.
-   For example installing any non-Python dependencies or adding any required
-   config settings.
+For example installing any non-Python dependencies or adding any required
+config settings.
 
 To install ckanext-aircan:
 
 1. Activate your CKAN virtual environment, for example:
 
-     . /usr/lib/ckan/default/bin/activate
+   . /usr/lib/ckan/default/bin/activate
 
 2. Clone the source and install it on the virtualenv
 
-    git clone https://github.com/Datopian/ckanext-aircan.git
-    cd ckanext-aircan
-    pip install -e .
-	pip install -r requirements.txt
+   git clone https://github.com/Datopian/ckanext-aircan.git
+   cd ckanext-aircan
+   pip install -e .
 
 3. Add `aircan` to the `ckan.plugins` setting in your CKAN
    config file (by default the config file is located at
@@ -54,22 +37,25 @@ To install ckanext-aircan:
 
 4. Restart CKAN. For example if you've deployed CKAN with Apache on Ubuntu:
 
-     sudo service apache2 reload
-
+   sudo service apache2 reload
 
 ## Config settings
 
-None at present
+```
+ckanext.aircan.endpoint = http://localhost:8080
+ckanext.aircan.server = gcp | local
+ckanext.aircan.dag_id = example_dag
+ckanext.aircan.api_version = v1 | v2
 
-**TODO:** Document any optional config settings here. For example:
+# If GCP server is used
+ckanext.aircan.google_credentials_json =
 
-	# The minimum number of hours to wait before re-checking a resource
-	# (optional, default: 24).
-	ckanext.aircan.some_setting = some_default_value
-
+# If local server is used
+ckanext.aircan.airflow_password =
+ckanext.aircan.airflow_username =
+```
 
 ## Developer installation
-
 To install ckanext-aircan for development, activate your CKAN virtualenv and
 do:
 
@@ -79,44 +65,42 @@ do:
     pip install -r dev-requirements.txt
 
 
-## Tests
+## Endpoints
 
-To run the tests, do:
+This extension adds three CKAN Action API endpoints:
 
-    pytest --ckan-ini=test.ini
+* **`/api/3/action/aircan_submit`**
+  Triggers an Airflow DAG run for a specified CKAN **resource**.
+
+* **`/api/3/action/aircan_status`**
+  Returns the status of the **most recent** Airflow DAG run for a specified CKAN **resource**.
+
+* **`/api/3/action/aircan_status_logs`**
+  Updates (or appends) progress logs on CKAN for a resource based on messages emitted during an Airflow DAG run.
 
 
-## Releasing a new version of ckanext-aircan
+Example request body used by `aircan_status_logs` (and/or as the shape of a status/log record):
 
-If ckanext-aircan should be available on PyPI you can follow these steps to publish a new version:
+```json
+{
+  "dag_run_id": "6591d0db-053e-4d9d-98d3-a0ce8f9a004d",
+  "resource_id": "63b3d77e-032f-4ef0-8790-cc81d0509d5f",
+  "state": "running",
+  "message": "Queued for processing (dag_run_id=6591d0db-053e-4d9d-98d3-a0ce8f9a004d).",
+  "type": "info",
+  "error": null,
+  "clear_logs": false
+}
+```
 
-1. Update the version number in the `pyproject.toml` file. See [PEP 440](http://legacy.python.org/dev/peps/pep-0440/#public-version-identifiers) for how to choose version numbers.
-
-2. Make sure you have the latest version of necessary packages:
-
-    pip install --upgrade setuptools wheel twine
-
-3. Create a source and binary distributions of the new version:
-
-       python -m build && twine check dist/*
-
-   Fix any errors you get.
-
-4. Upload the source distribution to PyPI:
-
-       twine upload dist/*
-
-5. Commit any outstanding changes:
-
-       git commit -a
-       git push
-
-6. Tag the new release of the project on GitHub with the version number from
-   the `setup.py` file. For example if the version number in `setup.py` is
-   0.0.1 then do:
-
-       git tag 0.0.1
-       git push --tags
+### Field descriptions
+* **`resource_id`** *(string, required)*: CKAN resource UUID.
+* **`dag_run_id`** *(string, required)*: Airflow DAG run identifier.
+* **`state`** *(string, optional)*: Current run state (e.g. `queued`, `running`, `success`, `failed`).
+* **`message`** *(string, optional)*: Human-readable progress or status message. It will time-stamped and stored in CKAN appended to previous messages unless `clear_logs` is set to `true`.
+* **`type`** *(string, optional)*: Log level/category, e.g. `info`, `warning`, `error`. Default is `info`.
+* **`error`** *(string|null, optional)*: Error details (use `null` when not applicable).
+* **`clear_logs`** *(boolean, optional)*: If `true`, clears existing logs otherwise appends to them keep a history.
 
 ## License
 
