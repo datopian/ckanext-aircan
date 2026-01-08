@@ -102,6 +102,20 @@ Example request body used by `aircan_status_logs` (and/or as the shape of a stat
 * **`error`** *(string|null, optional)*: Error details (use `null` when not applicable).
 * **`clear_logs`** *(boolean, optional)*: If `true`, clears existing logs otherwise appends to them keep a history.
 
+## Extending Aircan payload 
+You can extend the payload sent to Airflow by implementing the `IAircan` interface in your own CKAN plugin.
+
+```
+class ExamplePlugin(plugins.SingletonPlugin):
+    plugins.implements(plugins.IConfigurer)
+    plugins.implements(interfaces.IAircan)
+
+    def update_payload(self, context, payload):
+            payload['new_field'] = tk.config.get('ckanext.example.new_field')
+            return payload
+            
+```
+
 ## License
 
 [AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html)
