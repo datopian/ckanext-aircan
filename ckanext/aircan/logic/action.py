@@ -51,7 +51,7 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
                 "resource_id": data_dict.get("id"),
                 "dag_run_id": dag_run.get("dag_run_id"),
                 "state": "queued",
-                "message": f"Added to the queue to be processed with '{dag_run.get("dag_run_id")}'.",
+                "message": f"Added to the queue to be processed with '{dag_run.get('dag_run_id')}'.",
                 "clear_logs": True,
             },
         )
