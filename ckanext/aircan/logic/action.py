@@ -44,6 +44,7 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     client = AirflowClient()
     try:
         dag_run = client.trigger_dag(conf=payload)
+        dag_run_id = dag_run.get("dag_run_id")
         context.update({"session": context["model"].meta.create_local_session()})
         tk.get_action("aircan_status_update")(
             context,
@@ -51,13 +52,13 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
                 "resource_id": data_dict.get("id"),
                 "dag_run_id": dag_run.get("dag_run_id"),
                 "state": "queued",
-                "message": f"Added to the queue to be processed with '{dag_run.get('dag_run_id')}'.",
+                "message": f"Added to the queue to be processed with {dag_run_id}.",
                 "clear_logs": True,
             },
         )
         return {
             "dag_run": dag_run,
-            "dag_run_id": dag_run.get("dag_run_id"),
+            "dag_run_id": dag_run_id,
         }
     except requests.HTTPError as e:
         log.error(tk._("Failed to trigger Airflow DAG '%s': %s"), client.dag_id, str(e))
