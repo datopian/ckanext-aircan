@@ -53,6 +53,17 @@ ckanext.aircan.google_credentials_json =
 # If local server is used
 ckanext.aircan.airflow_password =
 ckanext.aircan.airflow_username =
+
+# Other settings
+ckanext.aircan.ckan_api_key = 
+ckanext.aircan.gcs.bucket = 
+ckanext.aircan.gcs.project_id =
+ckanext.aircan.gcs.bigquery_dataset_id =
+ckanext.aircan.gcs.signed_url_expiration_seconds = 3600
+ckanext.aircan.gcs.service_account_json =
+ckanext.aircan.chunk_size = 104857600
+ckanext.aircan.skip_leading_rows = 1
+ckan.aircan.temp_table_prefix = _temp_
 ```
 
 ## Developer installation

@@ -15,6 +15,7 @@ from ckanext.aircan.lib.airflow import AirflowClient
 
 log = logging.getLogger(__name__)
 
+
 def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Submit a resource to Airflow for processing via Aircan DAG.
@@ -35,6 +36,24 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         "ckan_config": {
             "site_url": tk.config.get("ckan.site_url"),
             "api_key": tk.config.get("ckanext.aircan.ckan_api_key"),
+        },
+        "gcs_config": {
+            "project_id": tk.config.get("ckanext.aircan.gcs.project_id"),
+            "dataset_id": tk.config.get("ckanext.aircan.gcs.bigquery_dataset_id"),
+            "bucket": tk.config.get("ckanext.aircan.gcs.bucket"),
+            "chunk_size": tk.asint(
+                tk.config.get("ckanext.aircan.gcs.chunk_size", 262144)
+            ),
+            "signed_url_expiration_seconds": tk.asint(
+                tk.config.get("ckanext.aircan.gcs.signed_url_expiration_seconds", 3600)
+            ),
+            "service_account_json": tk.config.get("ckanext.aircan.gcs.service_account_json", False), 
+        },
+        "others_config": {
+            "skip_leading_rows": tk.config.get("ckanext.aircan.skip_leading_rows", 1),
+            "temp_table_prefix": tk.config.get(
+                "ckanext.aircan.temp_table_prefix", "_temp_"
+            ),
         },
     }
 
@@ -62,8 +81,6 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         }
     except requests.HTTPError as e:
         log.error(tk._("Failed to trigger Airflow DAG '%s': %s"), client.dag_id, str(e))
-
-    
 
 
 def aircan_status(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -118,8 +135,8 @@ def aircan_status_update(context, data_dict):
     resource_id = data_dict.get("resource_id")
 
     if not resource_id:
-        raise p.toolkit.ValidationError({"resource_id": ["Missing resource_id"]})
-        
+        raise tk.ValidationError({"resource_id": ["Missing resource_id"]})
+
     tk.check_access("aircan_status_update", context, {"resource_id": resource_id})
 
     now_dt = datetime.now(timezone.utc)
