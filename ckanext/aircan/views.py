@@ -45,8 +45,7 @@ class ResourcePipelineController(MethodView):
             )
 
         return tk.h.redirect_to(
-            controller="aircan",
-            action="resource_pipeline",
+            "aircan.resource_pipeline",
             id=id,
             resource_id=resource_id,
         )
@@ -86,8 +85,8 @@ class ResourcePipelineController(MethodView):
 
             try:
                 aircan_status["error"] = json.loads(error_val) if error_val else {}
-            except Exception:
-                aircan_status["error"] = json.loads(error_val) if error_val else {}
+            except (json.JSONDecodeError, ValueError):
+                aircan_status["error"] = {}
 
         return tk.render(
             "resource_pipeline.html",

@@ -1,21 +1,20 @@
 [![Tests](https://github.com/Datopian/ckanext-aircan/workflows/Tests/badge.svg?branch=main)](https://github.com/Datopian/ckanext-aircan/actions)
 
 # ckanext-aircan
-A CKAN extension that integrates Airflow orchestrating with CKAN. This extension allows you to trigger, monitor, and display the status and logs of Aiflow data ingestion flows directly from the CKAN interface.
+A CKAN extension that integrates Airflow orchestrating with CKAN. This extension allows you to trigger, monitor, and display the status and logs of Airflow data ingestion flows directly from the CKAN interface.
 
 
 ## Features
-- **Trigger Prefect Flows**: Automatically or manually submit CKAN resources for processing via Prefect.
-- **Status & Logs**: View the current status and logs of Prefect flow runs associated with CKAN resources.
+- **Trigger Airflow DAGs**: Automatically or manually submit CKAN resources for processing via Airflow.
+- **Status & Logs**: View the current status and logs of Airflow DAG runs associated with CKAN resources.
 
 ## Requirements
 - CKAN 2.11 or later (not tested on earlier versions)
 - Python 3.8+
-- A running [Airflow](https://airflow.apache.org/) server or Prefect Cloud
+- A running [Airflow](https://airflow.apache.org/) server
 
 ## Installation
 
-**TODO:** Add any additional install steps to the list below.
 For example installing any non-Python dependencies or adding any required
 config settings.
 

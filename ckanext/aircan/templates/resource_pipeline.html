@@ -87,7 +87,7 @@
           <button class="btn btn-primary"
                   name="save"
                   type="submit"
-                  {% if state in ['running', 'queued', 'pending'] %}disabled aria-disabled="true"{% endif %}">
+              {% if state in ['running', 'queued', 'pending'] %}disabled aria-disabled="true"{% endif %}>
             <i class="fa fa-diagram-project me-1"></i>
             {{ _('Run Data Pipeline') }}
           </button>

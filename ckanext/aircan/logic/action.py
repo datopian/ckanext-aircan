@@ -29,7 +29,7 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             data_dict.get("id"),
             resource_format,
         )
-        return
+        return {}
 
     payload = {
         "resource": data_dict,
@@ -47,7 +47,7 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             "signed_url_expiration_seconds": tk.asint(
                 tk.config.get("ckanext.aircan.gcs.signed_url_expiration_seconds", 3600)
             ),
-            "service_account_json": tk.config.get("ckanext.aircan.gcs.service_account_json", False), 
+            "service_account_json": tk.config.get("ckanext.aircan.gcs.service_account_json", False),
         },
         "others_config": {
             "skip_leading_rows": tk.config.get("ckanext.aircan.skip_leading_rows", 1),
@@ -83,7 +83,17 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             "dag_run_id": dag_run_id,
         }
     except requests.HTTPError as e:
-        log.error(tk._("Failed to trigger Airflow DAG '%s': %s"), client.dag_id, str(e))
+        log.error(
+            tk._("Failed to trigger Airflow DAG '%s': %s"), client.dag_id, str(e)
+        )
+        raise tk.ValidationError(
+            {
+                "airflow": [
+                    tk._("Failed to trigger Airflow DAG '%s': %s")
+                    % (client.dag_id, str(e))
+                ]
+            }
+        )
 
 
 def aircan_status(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -104,17 +114,25 @@ def aircan_status(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     )
     if task_status:
         dag_run_id = json.loads(task_status.get("value", "{}")).get("dag_run_id", "")
-        client = AirflowClient()
-        try:
-            dag_run = client.get_dag_run(dag_run_id)
-            task_status.update(
-                {
-                    "dag": dag_run,
-                }
-            )
-        except requests.HTTPError as e:
-            log.error(
-                tk._("Failed to fetch Airflow DAG run '%s': %s"), dag_run_id, str(e)
+        if dag_run_id:
+            client = AirflowClient()
+            try:
+                dag_run = client.get_dag_run(dag_run_id)
+                task_status.update(
+                    {
+                        "dag": dag_run,
+                    }
+                )
+            except requests.HTTPError as e:
+                log.error(
+                    tk._("Failed to fetch Airflow DAG run '%s': %s"),
+                    dag_run_id,
+                    str(e),
+                )
+        else:
+            log.debug(
+                "Skipping Airflow DAG run fetch for resource %s because dag_run_id is empty.",
+                resource_id,
             )
 
     return task_status

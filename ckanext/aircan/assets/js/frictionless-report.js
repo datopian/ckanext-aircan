@@ -81,7 +81,7 @@ ckan.module("validation-report", function ($) {
     /* ─── Status banner ─── */
     _renderStatusBanner: function (report) {
       var valid = report.valid;
-      var s = report.stats;
+      var s = report.stats || { errors: 0, warnings: 0, seconds: 0 };
       var cls = valid ? "alert-success" : "alert-danger";
       var icon = valid ? "fa-check-circle" : "fa-times-circle";
       var label = valid ? "Valid" : "Invalid";

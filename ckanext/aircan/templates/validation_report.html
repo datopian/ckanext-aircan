@@ -10,7 +10,7 @@
 
 {% block primary_content_inner %}
   {% if validation_report %}
-    <div id="validation-report" data-module="validation-report"  data-module-report='{{ validation_report | tojson }}''></div>
+    <div id="validation-report" data-module="validation-report"  data-module-report='{{ validation_report | tojson }}'></div>
   {% else %}
     <div class="alert alert-info">
       <p>{{ _('No validation report available for this resource.') }}</p>

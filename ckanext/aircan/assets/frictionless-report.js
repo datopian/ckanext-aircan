@@ -251,7 +251,7 @@ ckan.module("validation-report", function ($) {
         html += '<p class="vr-message">' + this._esc(msg) + "</p>";
       }
 
-      html += "</div></div>";
+      html += "</div></div></div>";
       return html;
     },
 
