@@ -1,0 +1,221 @@
+/* =============================================
+   CKAN Validation Report Styles
+   ============================================= */
+
+.validation-report {
+  margin: 20px 0;
+}
+
+/* ─── Status Banner ─── */
+.vr-status-banner {
+  font-size: 14px;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+}
+.vr-status-banner .fa {
+  margin-right: 5px;
+}
+
+/* ─── Error Group ─── */
+.vr-error-group {
+  margin-bottom: 30px;
+  border: 1px solid #e6e9ee;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+/* ─── Group Header: "1 x [Type Error]" ─── */
+.vr-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0;
+  font-size: 16px;
+  /* allow users to select / copy the header text */
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  cursor: text;
+  padding: 10px 14px;
+  border-radius: 0;
+}
+.vr-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 8px;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  color: #1f2937;
+  background: #eef2f7;
+  border: 1px solid #d6dde7;
+  border-radius: 999px;
+  /* make the count selectable too */
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  margin-right: 4px;
+  min-width: 32px;
+  text-align: center;
+}
+
+/* visually indicate error/warning on the group header */
+.vr-group--error > .vr-group-header {
+  border-left: 4px solid #e74c3c;
+  border-bottom: 1px solid rgba(231, 76, 60, 0.2);
+  background: linear-gradient(90deg, rgba(231, 76, 60, 0.08), rgba(231, 76, 60, 0.02));
+}
+.vr-group--warning > .vr-group-header {
+  border-left: 4px solid #f39c12;
+  border-bottom: 1px solid rgba(243, 156, 18, 0.22);
+  background: linear-gradient(90deg, rgba(243, 156, 18, 0.1), rgba(243, 156, 18, 0.02));
+}
+
+/* ─── Badges ─── */
+.vr-badge {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #fff;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+}
+.vr-badge--error {
+  background-color: #e74c3c;
+}
+.vr-badge--warning {
+  background-color: #f39c12;
+}
+
+/* toggle + collapsible body */
+.vr-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  padding: 0;
+  margin-left: auto;
+  cursor: pointer;
+  color: #3b4252;
+  font-size: 13px;
+}
+.vr-group-toggle:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.vr-group-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(66, 139, 202, 0.25);
+}
+.vr-group-toggle .fa {
+  transition: transform 0.15s ease;
+}
+.vr-error-group.vr-collapsed .vr-group-toggle .fa {
+  transform: rotate(-90deg);
+}
+.vr-error-group.vr-collapsed .vr-group-body {
+  display: none;
+}
+
+.vr-group-body {
+  padding: 8px 12px 12px;
+}
+
+/* ─── Boxes (description, heading, messages) ─── */
+.vr-box {
+  padding: 14px 16px;
+}
+.vr-box p {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+}
+
+/* Top box: description (white bg, border left+top+right) */
+.vr-box--top {
+  margin-top: 0;
+  background: #fff;
+}
+
+/* Heading box ("The full list…") */
+.vr-box--heading {
+  background: #fdecea;
+}
+
+/* Messages list */
+.vr-box--messages {
+  background: #fdf2f1;
+}
+
+/* ─── Border variants ─── */
+.vr-border--error {
+  border: 2px solid #e74c3c;
+  border-bottom: none;
+}
+.vr-border--error-bottom {
+  border: 2px solid #e74c3c;
+  border-top: none;
+}
+.vr-border--warning {
+  border: 2px solid #f39c12;
+  margin-top: 0;
+  border-radius: 0;
+}
+
+/* ─── Messages ─── */
+.vr-message {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #555;
+}
+.vr-message:last-child {
+  margin-bottom: 0;
+}
+
+/* ─── Data Table ─── */
+.vr-table-wrap {
+  margin-top: 16px;
+  overflow-x: auto;
+}
+.vr-table {
+  font-size: 13px;
+  width: 100%;
+}
+.vr-table thead th {
+  background: #f5f5f5;
+  font-weight: 700;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.vr-row-num {
+  width: 40px;
+  text-align: center;
+  color: #888;
+  background: #fafafa !important;
+}
+.vr-cell--error {
+  background-color: #fce4e4 !important;
+  color: #c0392b;
+  font-weight: 600;
+}
+.vr-empty-row td {
+  height: 32px;
+  background: #fdfdfd;
+}
+
+/* ─── Warning box colors ─── */
+.vr-border--warning .vr-message {
+  color: #7d5a00;
+}

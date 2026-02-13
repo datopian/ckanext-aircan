@@ -54,6 +54,9 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             "temp_table_prefix": tk.config.get(
                 "ckanext.aircan.temp_table_prefix", "_temp_"
             ),
+            "infer_schema": tk.asbool(
+                tk.config.get("ckanext.aircan.infer_schema", True)
+            ),
         },
     }
 
@@ -101,7 +104,6 @@ def aircan_status(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     )
     if task_status:
         dag_run_id = json.loads(task_status.get("value", "{}")).get("dag_run_id", "")
-
         client = AirflowClient()
         try:
             dag_run = client.get_dag_run(dag_run_id)
@@ -160,6 +162,7 @@ def aircan_status_update(context, data_dict):
             if value:
                 parsed = json.loads(value)
                 logs = parsed.get("logs") or []
+                dag_run_id = parsed.get("dag_run_id", dag_run_id)
                 if not isinstance(logs, list):
                     logs = []
         except Exception:
@@ -167,12 +170,14 @@ def aircan_status_update(context, data_dict):
                 "Failed to load previous aircan logs for resource_id=%s", resource_id
             )
 
-    logs.append({"datetime": now, "message": message})
+    if _type != "error": 
+        logs.append({"datetime": now, "message": message})
 
     value = {"dag_run_id": dag_run_id, "logs": logs}
 
     is_error = _type == "error"
-    error_payload = {"message": message} if is_error else None
+    
+    error_payload = message if is_error else None
 
     task_dict = {
         "entity_id": resource_id,

@@ -32,10 +32,20 @@ class AircanPlugin(plugins.SingletonPlugin):
         """
         Notify the plugin of a domain object modification.
         """
-        if operation != DomainObjectOperation.changed or not isinstance(
-            entity, Resource
+        if not isinstance(entity, Resource):
+            return
+
+        if operation not in (
+            DomainObjectOperation.new,
+            DomainObjectOperation.changed,
         ):
             return
+
+        if operation == DomainObjectOperation.changed:
+            url_changed = bool(getattr(entity, "url_changed", False))
+            last_modified_changed = bool(getattr(entity, "last_modified", False))
+            if not (url_changed or last_modified_changed):
+                return
 
         context = {
             "ignore_auth": True,
@@ -46,10 +56,6 @@ class AircanPlugin(plugins.SingletonPlugin):
                 "id": entity.id,
             },
         )
-        if not getattr(entity, "url_changed", False) or not getattr(
-            entity, "last_modified", False
-        ):
-            return
         self._self_aircan_submit(resource_dict)
 
     def _self_aircan_submit(self, resource_dict):

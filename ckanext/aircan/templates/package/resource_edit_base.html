@@ -2,4 +2,5 @@
 
 {% block inner_primary_nav %}
     {{ h.build_nav_icon('aircan.resource_pipeline', _('Data Pipeline'), id=pkg.name, resource_id=res.id, icon='database') }}
+    {{ h.build_nav_icon('aircan.validation_report', _('Validation Report'), id=pkg.name, resource_id=res.id, icon='tasks') }}
 {% endblock %}
