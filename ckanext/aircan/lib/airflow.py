@@ -126,11 +126,11 @@ class AirflowClient:
             "conf": conf or {},
             "logical_date": logical_date.isoformat().replace("+00:00", "Z"),
         }
-
         resp = self.request(
             "POST", f"/api/{self.api_version}/dags/{self.dag_id}/dagRuns", json=payload
         )
 
+    
         if resp.status_code in (200, 201):
             data = resp.json()
             data.setdefault("dag_run_id", dag_run_id)

@@ -1,4 +1,5 @@
 import json
+import requests
 from ckan.plugins import toolkit as tk
 import ckan.model as model
 
@@ -15,7 +16,7 @@ def get_aircan_badge(resource_id: str):
 
     try:
         aircan_status = tk.get_action("aircan_status")(context, {"id": resource_id})
-    except (tk.ObjectNotFound, tk.ValidationError):
+    except (tk.ObjectNotFound, tk.ValidationError, requests.ConnectionError):
         return ""
 
     if not aircan_status:

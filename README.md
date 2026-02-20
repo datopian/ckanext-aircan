@@ -54,15 +54,16 @@ ckanext.aircan.airflow_password =
 ckanext.aircan.airflow_username =
 
 # Other settings
-ckanext.aircan.ckan_api_key = 
 ckanext.aircan.gcs.bucket = 
 ckanext.aircan.gcs.project_id =
 ckanext.aircan.gcs.bigquery_dataset_id =
 ckanext.aircan.gcs.signed_url_expiration_seconds = 3600
-ckanext.aircan.gcs.service_account_json =
 ckanext.aircan.chunk_size = 104857600
 ckanext.aircan.skip_leading_rows = 1
 ckan.aircan.temp_table_prefix = _temp_
+ckanext.aircan.notification_to_email = 
+ckanext.aircan.notification_from_email =
+
 ```
 
 ## Developer installation
@@ -85,11 +86,11 @@ This extension adds three CKAN Action API endpoints:
 * **`/api/3/action/aircan_status`**
   Returns the status of the **most recent** Airflow DAG run for a specified CKAN **resource**.
 
-* **`/api/3/action/aircan_status_logs`**
+* **`/api/3/action/aircan_status_update`**
   Updates (or appends) progress logs on CKAN for a resource based on messages emitted during an Airflow DAG run.
 
 
-Example request body used by `aircan_status_logs` (and/or as the shape of a status/log record):
+Example request body used by `aircan_status_update` (and/or as the shape of a status/log record):
 
 ```json
 {

@@ -1,5 +1,6 @@
 import json
 from flask import Blueprint
+import requests
 import ckan.plugins.toolkit as tk
 from flask.views import MethodView
 import ckan.model as model
@@ -38,8 +39,11 @@ class ResourcePipelineController(MethodView):
                 resource_dict,
             )
 
+        except requests.ConnectionError:
+            tk.h.flash_error(
+                tk._("Unable to connect to Airflow. Please check the connection settings.")
+            )
         except logic.ValidationError:
-            pass
             tk.h.flash_error(
                 tk._("There was an error submitting the resource for processing.")
             )
@@ -62,6 +66,11 @@ class ResourcePipelineController(MethodView):
             aircan_status = tk.get_action("aircan_status")(
                 context, {"resource_id": resource_id}
             )
+        except requests.ConnectionError:
+            tk.h.flash_error(
+                tk._("Unable to connect to Airflow. Please check the connection settings.")
+            )
+            aircan_status = {}
         except logic.NotFound:
             aircan_status = {}
         except logic.NotAuthorized:
@@ -121,6 +130,11 @@ class ValidationReportController(MethodView):
             aircan_status = tk.get_action("aircan_status")(
                 context, {"resource_id": resource_id}
             )
+        except requests.ConnectionError:
+            tk.h.flash_error(
+                tk._("Unable to connect to Airflow. Please check the connection settings.")
+            )
+            aircan_status = {}
         except logic.NotFound:
             aircan_status = {}
         except logic.NotAuthorized:
