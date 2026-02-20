@@ -32,9 +32,12 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
     payload = {
-        "resource": data_dict,
+        "resource": {
+            **data_dict,
+            "url": data_dict.get("url").replace("ckan.com", "host.docker.internal"),
+        },
         "ckan_config": {
-            "site_url": tk.config.get("ckan.site_url"),
+            "site_url": "http://host.docker.internal",
             "site_id": tk.config.get("ckan.site_id"),
         },
         "gcs_config": {
@@ -113,7 +116,7 @@ def aircan_status(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     )
     if task_status:
         dag_run_id = json.loads(task_status.get("value", "{}")).get("dag_run_id", "")
-        if dag_r;un_id:
+        if dag_run_id:
             client = AirflowClient()
             try:
                 dag_run = client.get_dag_run(dag_run_id)
