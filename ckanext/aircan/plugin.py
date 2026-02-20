@@ -43,7 +43,9 @@ class AircanPlugin(plugins.SingletonPlugin):
 
         if operation == DomainObjectOperation.changed:
             url_changed = bool(getattr(entity, "url_changed", False))
-            last_modified_changed = bool(getattr(entity, "last_modified", False))
+            from sqlalchemy.orm import attributes as sa_attributes
+            history = sa_attributes.get_history(entity, "last_modified")
+            last_modified_changed = bool(history.added)
             if not (url_changed or last_modified_changed):
                 return
 
