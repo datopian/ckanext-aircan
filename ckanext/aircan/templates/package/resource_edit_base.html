@@ -1,6 +1,10 @@
 {% ckan_extends %}
 
 {% block inner_primary_nav %}
-    {{ h.build_nav_icon('aircan.resource_pipeline', _('Data Pipeline'), id=pkg.name, resource_id=res.id, icon='database') }}
-    {{ h.build_nav_icon('aircan.validation_report', _('Validation Report'), id=pkg.name, resource_id=res.id, icon='tasks') }}
+    {% if h.allowed_aircan_format(res.format) and res.url_type != 'datastore' %}
+        {{ h.build_nav_icon('aircan.resource_pipeline', _('Data Pipeline'), id=pkg.name, resource_id=res.id, icon='database') }}
+        {% if h.is_validate_records_enabled() %}
+            {{ h.build_nav_icon('aircan.validation_report', _('Validation Report'), id=pkg.name, resource_id=res.id, icon='tasks') }}
+        {% endif %}
+    {% endif %}
 {% endblock %}

@@ -10,7 +10,6 @@ import ckan.plugins as plugins
 import ckan.plugins.toolkit as tk
 
 from ckanext.aircan import interfaces
-from ckanext.aircan.utils import allowed_formats
 from ckanext.aircan.lib.airflow import AirflowClient
 
 log = logging.getLogger(__name__)
@@ -23,18 +22,34 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     tk.check_access("aircan_submit", context, data_dict)
     resource_format = data_dict.get("format")
-    if not allowed_formats(resource_format):
+    if not tk.h.allowed_aircan_format(resource_format):
         log.debug(
             "Skipping aircan resource %s because format '%s' is not allowed.",
             data_dict.get("id"),
             resource_format,
         )
-        return {}
+        context.update({"session": context["model"].meta.create_local_session()})
+        return tk.abort(
+            400,
+            tk._("Resource format '%s' is not allowed for Aircan.") % resource_format,
+        )
+
+    if data_dict.get("url_type") == "datastore":
+        log.debug(
+            "Skipping aircan resource %s as resource is managed by DataStore API.",
+            data_dict.get("id"),
+        )
+        return tk.abort(
+            400, tk._("Resources managed by DataStore API are not supported by Aircan.")
+        )
 
     payload = {
-        "resource": data_dict,
+        "resource": {
+            **data_dict,
+            "url": data_dict.get("url").replace("ckan.com", "host.docker.internal"),
+        },
         "ckan_config": {
-            "site_url": tk.config.get("ckan.site_url"),
+            "site_url": "http://host.docker.internal",
             "site_id": tk.config.get("ckan.site_id"),
         },
         "gcs_config": {
@@ -56,13 +71,32 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             "infer_schema": tk.asbool(
                 tk.config.get("ckanext.aircan.infer_schema", True)
             ),
-            "notification_to_email": (tk.config.get("ckanext.aircan.notification_to_email") or "").split() or [],
-            "notification_from_email": tk.config.get("ckanext.aircan.notification_from_email")
+            "notification_to_email": (
+                tk.config.get("ckanext.aircan.notification_to_email") or ""
+            ).split()
+            or [],
+            "validate_records": tk.asbool(
+                tk.config.get("ckanext.aircan.validate_records", True)
+            ),
+            "notification_from_email": tk.config.get(
+                "ckanext.aircan.notification_from_email"
+            ),
+        },
+        "s3_config": {
+            "bucket": tk.config.get("ckanext.aircan.s3.bucket"),
+            "key_prefix": (tk.config.get("ckanext.aircan.s3.key_prefix") or "").replace(
+                "%resource_id%",
+                str(data_dict.get("id")),
+            ),
+            "endpoint_url": tk.config.get("ckanext.aircan.s3.endpoint_url"),
+            "region": tk.config.get("ckanext.aircan.s3.region"),
+        },
     }
-        }
 
     for plugin in plugins.PluginImplementations(interfaces.IAircan):
         plugin.update_payload(context, payload)
+
+    log.debug("Triggering Airflow DAG with payload: %s", json.dumps(payload, indent=2))
 
     client = AirflowClient()
     try:
@@ -125,7 +159,9 @@ def aircan_status(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
                 )
             except requests.ConnectionError as e:
                 log.error(
-                    tk._("Unable to connect to Airflow while fetching DAG run '%s': %s"),
+                    tk._(
+                        "Unable to connect to Airflow while fetching DAG run '%s': %s"
+                    ),
                     dag_run_id,
                     str(e),
                 )

@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 class AircanPlugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IConfigurer)
+    plugins.implements(plugins.IConfigDeclaration)
     plugins.implements(plugins.IActions)
     plugins.implements(plugins.IAuthFunctions)
     plugins.implements(plugins.IDomainObjectModification)
@@ -26,6 +27,45 @@ class AircanPlugin(plugins.SingletonPlugin):
         tk.add_template_directory(config_, "templates")
         tk.add_public_directory(config_, "public")
         tk.add_resource("assets", "aircan")
+
+    # IConfigDeclaration
+    def declare_config_options(self, declaration, key):
+        declaration.annotate("Airflow connection")
+        declaration.declare(key.ckanext.aircan.endpoint)
+        declaration.declare(key.ckanext.aircan.dag_id)
+        declaration.declare(key.ckanext.aircan.server).set_default("local")
+        declaration.declare(key.ckanext.aircan.api_version).set_default("v2")
+        declaration.declare(key.ckanext.aircan.timeout).set_default(90)
+        declaration.declare(key.ckanext.aircan.token_endpoint).set_default("/auth/token")
+
+        declaration.annotate("Airflow local authentication")
+        declaration.declare(key.ckanext.aircan.airflow_username)
+        declaration.declare(key.ckanext.aircan.airflow_password)
+
+        declaration.annotate("Airflow GCP authentication")
+        declaration.declare(key.ckanext.aircan.google_credentials_json)
+
+        declaration.annotate("General processing options")
+        declaration.declare(key.ckanext.aircan.formats)
+        declaration.declare(key.ckanext.aircan.skip_leading_rows).set_default(1)
+        declaration.declare(key.ckanext.aircan.temp_table_prefix).set_default("_temp_")
+        declaration.declare(key.ckanext.aircan.infer_schema).set_default(True)
+        declaration.declare(key.ckanext.aircan.validate_records).set_default(True)
+        declaration.declare(key.ckanext.aircan.notification_to_email)
+        declaration.declare(key.ckanext.aircan.notification_from_email)
+
+        declaration.annotate("Google Cloud Storage configuration")
+        declaration.declare(key.ckanext.aircan.gcs.project_id)
+        declaration.declare(key.ckanext.aircan.gcs.bigquery_dataset_id)
+        declaration.declare(key.ckanext.aircan.gcs.bucket)
+        declaration.declare(key.ckanext.aircan.gcs.chunk_size).set_default(262144)
+        declaration.declare(key.ckanext.aircan.gcs.signed_url_expiration_seconds).set_default(3600)
+
+        declaration.annotate("S3 configuration")
+        declaration.declare(key.ckanext.aircan.s3.bucket)
+        declaration.declare(key.ckanext.aircan.s3.key_prefix)
+        declaration.declare(key.ckanext.aircan.s3.endpoint_url)
+        declaration.declare(key.ckanext.aircan.s3.region)
 
     # IDomainObjectModification
     def notify(self, entity, operation):

@@ -3,8 +3,20 @@ import requests
 from ckan.plugins import toolkit as tk
 import ckan.model as model
 
+DEFAULT_FORMATS = [
+    "csv",
+    "json",
+    "ndjson",
+    "tsv",
+    "application/csv",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "text/csv",
+    "text/tab-separated-values",
+    "application/json",
+    "application/x-ndjson",
+]
 
-def get_aircan_badge(resource_id: str):
+def get_aircan_badge(resource_id: str, format_: str) -> str:
     """
     Helper function to get the status of a aircan for a given resource ID.
     Returns a dictionary with the status information.
@@ -13,7 +25,9 @@ def get_aircan_badge(resource_id: str):
         "model": model,
         "ignore_auth": True,
     }
-
+    if not tk.h.allowed_aircan_format(format_):
+        return ""
+    
     try:
         aircan_status = tk.get_action("aircan_status")(context, {"id": resource_id})
     except (tk.ObjectNotFound, tk.ValidationError, requests.ConnectionError):
@@ -44,7 +58,27 @@ def get_aircan_badge(resource_id: str):
     )
 
 
+def allowed_aircan_format(format_: str) -> bool:
+    """Return True if `format_` is in aircan allowed formats."""
+    cfg = tk.config.get("ckanext.aircan.formats")
+    if cfg and cfg.strip():
+        formats = cfg.lower().split()
+    else:
+        formats = DEFAULT_FORMATS
+
+    if not format_:
+        return False
+
+    return format_.lower() in formats
+
+def is_validate_records_enabled() -> bool:
+    """Return True if ckanext.aircan.validate_records is enabled."""
+    return tk.asbool(tk.config.get("ckanext.aircan.validate_records", True))
+
+
 def get_helpers():
     return {
         "get_aircan_badge": get_aircan_badge,
+        "allowed_aircan_format": allowed_aircan_format,
+        "is_validate_records_enabled": is_validate_records_enabled,
     }
