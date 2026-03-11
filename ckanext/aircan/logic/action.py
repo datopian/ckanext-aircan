@@ -44,12 +44,9 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     payload = {
-        "resource": {
-            **data_dict,
-            "url": data_dict.get("url").replace("ckan.com", "host.docker.internal"),
-        },
+        "resource": data_dict,
         "ckan_config": {
-            "site_url": "http://host.docker.internal",
+            "site_url": tk.config.get("ckan.site_url"),
             "site_id": tk.config.get("ckan.site_id"),
         },
         "gcs_config": {
