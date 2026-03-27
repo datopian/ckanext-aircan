@@ -1,5 +1,4 @@
 # encoding: utf-8
-import requests
 from datetime import date
 from ckan.common import config
 from ckan.plugins.toolkit import get_action, check_access
@@ -11,14 +10,11 @@ import uuid
 import datetime
 
 from ckan.common import request
-from gcp_handler import GCPHandler
-from dag_status_report import DagStatusReport
+from ckanext.aircan_connector.lib.airflow import AirflowClient
 import ckan.logic as logic
 import ckan.plugins as p
 import ckan.lib.helpers as h
 
-REACHED_RESOPONSE  = False
-AIRCAN_RESPONSE_AFTER_SUBMIT = None
 
 log = logging.getLogger(__name__)
 
@@ -185,63 +181,37 @@ def aircan_submit(context, data_dict):
             pass
 
         log.debug("payload: {}".format(payload))
-        global REACHED_RESOPONSE
-        REACHED_RESOPONSE = True
-        global AIRCAN_RESPONSE_AFTER_SUBMIT 
 
-        if config.get('ckan.airflow.cloud','local') != "GCP":
-            ckan_airflow_endpoint_url = config.get('ckan.airflow.url')
-            log.info("Airflow Endpoint URL: {0}".format(ckan_airflow_endpoint_url))
-            response = requests.post(ckan_airflow_endpoint_url,
-                                     auth=requests.auth.HTTPBasicAuth( 
-                                        config['ckan.airflow.username'], 
-                                        config['ckan.airflow.password']),
-                                     data=json.dumps(payload),
-                                     headers={'Content-Type': 'application/json',
-                                              'Cache-Control': 'no-cache'})
-            log.info(response.text)
-            response.raise_for_status()
-            log.info('AirCan Load completed')
-            
-            AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": response.json()}
-        else:
-            log.info("Invoking Airflow on Google Cloud Composer")
-            dag_name = request.params.get('dag_name')
-            if dag_name:
-                config['ckan.airflow.cloud.dag_name'] = dag_name
-            gcp_response = invoke_gcp(config, payload)
-            AIRCAN_RESPONSE_AFTER_SUBMIT = {"aircan_status": gcp_response}
+        dag_name = request.params.get('dag_name')
+        airflow_client = AirflowClient(config, payload)
+
+        if dag_name:
+            airflow_client.dag_id = dag_name
+
+        log.info("Invoking Airflow ({})".format(config.get('ckan.airflow.cloud', 'local')))
+        response = airflow_client.trigger_dag()
 
         # Update the aircan run status
-        p.toolkit.get_action('aircan_status_update')(context,{ 
+        p.toolkit.get_action('aircan_status_update')(context, {
             'dag_run_id': dag_run_id,
             'resource_id': res_id,
             'state': 'pending',
             'message': 'Added to the queue to be processed with run id \"{0}\"'.format(dag_run_id),
             'clear_logs': True
-            })
+        })
 
-    except ValueError:
+        return {"aircan_status": response}
+
+    except ValueError as e:
+        print(e)
         log.error(NO_SCHEMA_ERROR_MESSAGE)
-        h.flash_error(NO_SCHEMA_ERROR_MESSAGE.format(ckan_resource_url , ckan_resource_name),  allow_html=True)
+        h.flash_error(NO_SCHEMA_ERROR_MESSAGE.format(ckan_resource_url, ckan_resource_name), allow_html=True)
     except Exception as e:
         return {"success": False, "errors": [e]}
 
-    if REACHED_RESOPONSE == True:
-        return AIRCAN_RESPONSE_AFTER_SUBMIT
-
-def invoke_gcp(config, payload):
-    log.info('Invoking GCP')
-    gcp = GCPHandler(config, payload)
-    log.info('Handler created')
-    return gcp.trigger_dag()
-
-
 def aircan_dag_status(dag_name, dag_run_id):
-    dag_status_report = DagStatusReport(dag_name, dag_run_id, config)
-    if config.get('ckan.airflow.cloud','local') != "GCP":
-        return dag_status_report.get_local_aircan_report()
-    return dag_status_report.get_gcp_report()
+    client = AirflowClient(config, {})
+    return client.get_aircan_report(dag_run_id)
 
 def aircan_status(context, data_dict):
     ''' Get the status of a aircan job for a certain resource.
