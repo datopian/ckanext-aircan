@@ -1,0 +1,10 @@
+aircan-js:
+    filters: rjsmin
+    contents:
+        - js/aircan.js
+    output: aircan_connector/aircan.js
+
+aircan-css:
+    contents:
+        - css/aircan.css
+    output: aircan_connector/aircan.css

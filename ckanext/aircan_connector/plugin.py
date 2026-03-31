@@ -35,7 +35,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     def update_config(self, config_):
         toolkit.add_template_directory(config_, 'templates')
         toolkit.add_public_directory(config_, 'public')
-        toolkit.add_resource('fanstatic', 'aircan_connector')
+        toolkit.add_resource('assets', 'aircan_connector')
 
     def configure(self, config):
         self.config = config
