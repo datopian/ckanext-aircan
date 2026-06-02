@@ -106,10 +106,8 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
                 }
             )
         except toolkit.ValidationError as e:
-            # If datapusher is offline want to catch error instead
-            # of raising otherwise resource save will fail with 500
+            # Swallow ValidationErrors to avoid 500 on resource save
             log.critical(e)
-            pass
 
     # IActions
     def get_actions(self):
