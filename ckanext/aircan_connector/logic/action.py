@@ -2,7 +2,7 @@
 import requests
 from datetime import date
 from ckan.common import config
-from ckan.plugins.toolkit import get_action, check_access
+from ckan.plugins.toolkit import get_action, check_access, asbool
 from sqlalchemy import create_engine
 import ast
 
@@ -54,32 +54,35 @@ def _get_editor_user_email(context, pacakge_id):
 
 
 def upload_to_gcp(download_url, org, pacakge_name, resource):
-    '''
-        Upload to GCP is required if external storage is used.
-        Bigquery can fetch only from GCP
-    '''
-    log.info("GCP Here")
-    endpoint_url = config.get('ckanext.aircan.bucket_endpoint', '')
-    log.info("GCP Here 2")
-    access_id = config.get('ckanext.aircan.bucket_access_id', '')
-    log.info("GCP Here 3")
-    secret = config.get('ckanext.aircan.bucket_access_key', '')
-    log.info("GCP Here 4")
-    r = requests.get(download_url, stream=True)
-    log.info("GCP Here 5")
-    s3 = boto3.resource('s3', endpoint_url=endpoint_url, aws_access_key_id=access_id, aws_secret_access_key=secret, config=Config(signature_version='s3v4'))
-    log.info("GCP Here 6")
-    bucket_name = config.get('ckan.giftless.bucket', '')
-    log.info("GCP Here 7")
-    key = org + '/' + pacakge_name + '/' + resource # key is the name of file on your bucket
-    log.info("GCP Here 8")
+    """
+    Upload to GCP is required if external storage is used.
+    Bigquery can fetch only from GCP
+    """
+    endpoint_url = config.get("ckanext.aircan.bucket_endpoint", "")
+    access_id = config.get("ckanext.aircan.bucket_access_id", "")
+    secret = config.get("ckanext.aircan.bucket_access_key", "")
+    s3 = boto3.resource(
+        "s3",
+        endpoint_url=endpoint_url,
+        aws_access_key_id=access_id,
+        aws_secret_access_key=secret,
+        config=Config(signature_version="s3v4"),
+    )
+    bucket_name = config.get("ckan.giftless.bucket", "")
+    key = (
+        org + "/" + pacakge_name + "/" + resource
+    )  # key is the name of file on your bucket
+
+    log.info("Uploading resource to GCP bucket %s with key %s", bucket_name, key)
     try:
-        bucket = s3.Bucket(bucket_name)
-        bucket.upload_fileobj(r.raw, key)
-        log.info('Uploaded to gcp')
-    except Exception as e:
-        log.error(e)
-        pass
+        with requests.get(download_url, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            bucket = s3.Bucket(bucket_name)
+            bucket.upload_fileobj(r.raw, key)
+        log.info("Uploaded resource to GCP bucket %s with key %s", bucket_name, key)
+    except Exception:
+        log.exception("Failed to upload resource to GCP bucket %s with key %s", bucket_name, key)
+        raise
 
 def get_resource_signed_url(ckan_resource_url, ckan_api_key):
     log.info("Grabbinb signed url")
@@ -189,12 +192,14 @@ def aircan_submit_job(payload):
         organization_name = data_dict['organization_name']
         resource_hash = data_dict['resource_hash']
         log.info(f"Resource hash: {resource_hash}")
-        giftless_bucket = config.get('ckan.giftless.bucket', '')
-        external_bucket = config.get('ckan.giftless.external_bucket', False)
+        giftless_bucket = config.get("ckan.giftless.bucket", "")
+        external_bucket = asbool(config.get("ckan.giftless.external_bucket", False))
         if external_bucket:
-            ckan_resource_url = payload['ckan_resource_url']
-            if ckan_resource_url.get('href') is None:
-                raise Exception('Resource download spec is not available')
+            ckan_resource_url = get_action("get_resource_download_spec")(
+                {"ignore_auth": True}, {"resource": ckan_resource}
+            )
+            if ckan_resource_url.get("href") is None:
+                raise Exception("Resource download spec is not available")
             log.info("Download uri: {}".format(ckan_resource_url))
             upload_to_gcp(ckan_resource_url.get('href'), organization_name, pacakge_name, resource_hash)
             log.info("Uploaded to gcp")
