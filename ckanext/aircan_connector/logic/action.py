@@ -195,9 +195,15 @@ def aircan_submit_job(payload):
         giftless_bucket = config.get("ckan.giftless.bucket", "")
         external_bucket = asbool(config.get("ckan.giftless.external_bucket", False))
         if external_bucket:
-            ckan_resource_url = get_action("get_resource_download_spec")(
-                {"ignore_auth": True}, {"resource": ckan_resource}
-            )
+            ckan_resource_url = payload['ckan_resource_url']
+            try:
+                ckan_resource_url = get_action("get_resource_download_spec")(
+                    {"ignore_auth": True}, {"resource": ckan_resource}
+                )
+            except Exception:
+                log.exception(
+                    "Failed to refresh resource download spec; using queued download spec"
+                )
             if ckan_resource_url.get("href") is None:
                 raise Exception("Resource download spec is not available")
             log.info("Download uri: {}".format(ckan_resource_url))
