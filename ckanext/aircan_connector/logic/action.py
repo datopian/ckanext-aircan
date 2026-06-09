@@ -486,9 +486,9 @@ def aircan_submit(context, data_dict):
     if suspect_fields:
         msg = (
             'Field(s) [{}] must be changed to type "string". '
-            'These fields contain numbers with more than 16 digits. '
-            'When stored as numeric, values are silently rounded — '
-            'users will see incorrect filter suggestions. '
+            'These fields contain identifier values that are too large for numeric types. '
+            'When stored as numeric, values may be rounded or altered, leading to loss of data accuracy '
+            'and issues in downstream processing. '
             'Please update the schema and resubmit.'
         ).format(', '.join(suspect_fields))
         log.warning(
