@@ -6,6 +6,8 @@ from ckan.plugins.toolkit import get_action, check_access, asbool
 from sqlalchemy import create_engine
 import ast
 
+import csv
+import io
 import logging
 import json
 import uuid
@@ -31,6 +33,8 @@ AIRCAN_RESPONSE_AFTER_SUBMIT = None
 
 log = logging.getLogger(__name__)
 
+JS_MAX_SAFE_INTEGER = 9_007_199_254_740_991
+
 ValidationError = logic.ValidationError
 NotFound = logic.NotFound
 _get_or_bust = logic.get_or_bust
@@ -51,6 +55,77 @@ def _get_editor_user_email(context, pacakge_id):
         return user_dict.get('email', False)
     except:
         return False
+
+
+_NUMERIC_SCHEMA_TYPES = {'number', 'integer', 'float'}
+
+
+def _sample_csv_for_precision_risk(download_href, schema, sample_rows=100):
+    """
+    Stream the first sample_rows rows of the CSV at download_href.
+    Return a list of field names (typed as numeric in schema) whose values
+    exceed JS_MAX_SAFE_INTEGER in the sample.
+    Returns [] on any error so it never blocks ingestion.
+    """
+    if not download_href or not schema:
+        return []
+
+    try:
+        schema_dict = json.loads(schema) if isinstance(schema, str) else schema
+    except (json.JSONDecodeError, ValueError):
+        try:
+            schema_dict = ast.literal_eval(schema)
+        except Exception:
+            return []
+
+    numeric_fields = {
+        f['name'] for f in schema_dict.get('fields', [])
+        if f.get('type', '').lower() in _NUMERIC_SCHEMA_TYPES
+    }
+
+    if not numeric_fields:
+        return []
+
+    try:
+        response = requests.get(download_href, stream=True, timeout=3)
+        response.raise_for_status()
+
+        lines = []
+        for raw_line in response.iter_lines():
+            line = raw_line.decode('utf-8') if isinstance(raw_line, bytes) else raw_line
+            lines.append(line)
+            if len(lines) > sample_rows + 1:
+                break
+        response.close()
+
+        if not lines:
+            return []
+
+        reader = csv.DictReader(io.StringIO('\n'.join(lines)))
+        suspect = set()
+
+        for row in reader:
+            for field_name in numeric_fields - suspect:
+                raw = row.get(field_name, '')
+                if not raw:
+                    continue
+                try:
+                    val = int(raw)
+                except (ValueError, TypeError):
+                    try:
+                        val = float(raw)
+                    except (ValueError, TypeError):
+                        continue
+                if abs(val) > JS_MAX_SAFE_INTEGER:
+                    suspect.add(field_name)
+
+        return list(suspect)
+
+    except Exception as exc:
+        log.warning(
+            'Could not sample CSV for precision check at %s: %s', download_href, exc
+        )
+        return []
 
 
 def upload_to_gcp(download_url, org, pacakge_name, resource):
@@ -355,6 +430,51 @@ def aircan_submit(context, data_dict):
     editor_user_email = _get_editor_user_email(context, package_name)
     ckan_resource = data_dict.get('resource_json', {})
     ckan_resource_url = get_action('get_resource_download_spec')(context, {'resource': ckan_resource})
+
+    # Check CSV sample for numeric fields with values that exceed JS MAX_SAFE_INTEGER.
+    # Must run here (sync action), not inside aircan_submit_job (background worker).
+    # Flashes a notice to the editor and stores a persistent flag on the resource.
+    download_href = ckan_resource_url.get('href') if isinstance(ckan_resource_url, dict) else None
+    suspect_fields = _sample_csv_for_precision_risk(
+        download_href,
+        ckan_resource.get('schema', {})
+    )
+    resource_id = ckan_resource.get('id')
+    if suspect_fields:
+        msg = (
+            'Field(s) [{}] must be changed to type "string". '
+            'These fields contain identifier values that are too large for numeric types. '
+            'When stored as numeric, values may be rounded or altered, leading to loss of data accuracy '
+            'and issues in downstream processing. '
+            'Please update the schema and resubmit.'
+        ).format(', '.join(suspect_fields))
+        log.warning(
+            'Precision risk detected in resource "%s": %s',
+            ckan_resource.get('name', '?'),
+            msg,
+        )
+        h.flash_notice(msg)
+        if resource_id:
+            try:
+                res_obj = context['model'].Resource.get(resource_id)
+                if res_obj:
+                    extras = dict(res_obj.extras or {})
+                    extras['precision_warning'] = ', '.join(suspect_fields)
+                    res_obj.extras = extras
+                    context['model'].Session.commit()
+            except Exception as exc:
+                log.warning('Could not store precision_warning on resource %s: %s', resource_id, exc)
+    elif download_href and resource_id:
+        try:
+            res_obj = context['model'].Resource.get(resource_id)
+            if res_obj and res_obj.extras.get('precision_warning'):
+                extras = dict(res_obj.extras)
+                extras.pop('precision_warning', None)
+                res_obj.extras = extras
+                context['model'].Session.commit()
+        except Exception as exc:
+            log.warning('Could not clear precision_warning on resource %s: %s', resource_id, exc)
+
     job = jobs.enqueue(aircan_submit_job, [{
         'editor_user_email': editor_user_email,
         'data_dict': data_dict,
