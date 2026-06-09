@@ -475,51 +475,62 @@ def aircan_submit(context, data_dict):
     )
 
     # Check CSV sample for numeric fields with values that exceed JS MAX_SAFE_INTEGER.
-    # Must run here (sync action), not inside aircan_submit_job (background worker).
-    # Flashes a notice to the editor if suspect fields are found (soft warning, does not block).
-    download_href = ckan_resource_url.get('href') if isinstance(ckan_resource_url, dict) else None
-    suspect_fields = _sample_csv_for_precision_risk(
-        download_href,
-        ckan_resource.get('schema', {})
-    )
+    # Only runs when the file is new or changed — skips schema-only edits to avoid
+    # adding latency on every save. Hash comparison is done via resource extras.
     resource_id = ckan_resource.get('id')
-    if suspect_fields:
-        msg = (
-            'Field(s) [{}] must be changed to type "string". '
-            'These fields contain identifier values that are too large for numeric types. '
-            'When stored as numeric, values may be rounded or altered, leading to loss of data accuracy '
-            'and issues in downstream processing. '
-            'Please update the schema and resubmit.'
-        ).format(', '.join(suspect_fields))
-        log.warning(
-            'Precision risk detected in resource "%s": %s',
-            ckan_resource.get('name', '?'),
-            msg,
+    current_hash = ckan_resource.get('hash', '')
+    download_href = ckan_resource_url.get('href') if isinstance(ckan_resource_url, dict) else None
+
+    skip_check = False
+    if resource_id and current_hash:
+        try:
+            res_obj = context['model'].Resource.get(resource_id)
+            if res_obj and res_obj.extras.get('precision_check_hash') == current_hash:
+                skip_check = True  # same file as last check, no need to re-download
+        except Exception:
+            pass
+
+    if not skip_check:
+        suspect_fields = _sample_csv_for_precision_risk(
+            download_href,
+            ckan_resource.get('schema', {})
         )
-        h.flash_notice(msg)
-        # Store flag on the resource extras directly via the model to avoid
-        # triggering after_resource_update hooks (which would cause an infinite loop).
-        if resource_id:
+        if suspect_fields:
+            msg = (
+                'Field(s) [{}] must be changed to type "string". '
+                'These fields contain identifier values that are too large for numeric types. '
+                'When stored as numeric, values may be rounded or altered, leading to loss of data accuracy '
+                'and issues in downstream processing. '
+                'Please update the schema and resubmit.'
+            ).format(', '.join(suspect_fields))
+            log.warning(
+                'Precision risk detected in resource "%s": %s',
+                ckan_resource.get('name', '?'),
+                msg,
+            )
+            h.flash_notice(msg)
+            if resource_id:
+                try:
+                    res_obj = context['model'].Resource.get(resource_id)
+                    if res_obj:
+                        extras = dict(res_obj.extras or {})
+                        extras['precision_warning'] = ', '.join(suspect_fields)
+                        extras['precision_check_hash'] = current_hash
+                        res_obj.extras = extras
+                        context['model'].Session.commit()
+                except Exception as exc:
+                    log.warning('Could not store precision_warning on resource %s: %s', resource_id, exc)
+        elif download_href and resource_id:
             try:
                 res_obj = context['model'].Resource.get(resource_id)
                 if res_obj:
                     extras = dict(res_obj.extras or {})
-                    extras['precision_warning'] = ', '.join(suspect_fields)
+                    extras.pop('precision_warning', None)
+                    extras['precision_check_hash'] = current_hash
                     res_obj.extras = extras
                     context['model'].Session.commit()
             except Exception as exc:
-                log.warning('Could not store precision_warning on resource %s: %s', resource_id, exc)
-    elif download_href and resource_id:
-        # Check ran and found nothing — clear any previous flag
-        try:
-            res_obj = context['model'].Resource.get(resource_id)
-            if res_obj and res_obj.extras.get('precision_warning'):
-                extras = dict(res_obj.extras)
-                extras.pop('precision_warning', None)
-                res_obj.extras = extras
-                context['model'].Session.commit()
-        except Exception as exc:
-            log.warning('Could not clear precision_warning on resource %s: %s', resource_id, exc)
+                log.warning('Could not clear precision_warning on resource %s: %s', resource_id, exc)
 
     dag_name = request.params.get("dag_name")
     job = jobs.enqueue(
