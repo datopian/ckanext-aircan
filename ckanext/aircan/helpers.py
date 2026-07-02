@@ -4,16 +4,26 @@ from ckan.plugins import toolkit as tk
 import ckan.model as model
 
 DEFAULT_FORMATS = [
+    # file formats
     "csv",
+    "tsv",
     "json",
     "ndjson",
-    "tsv",
-    "application/csv",
-    "application/vnd.oasis.opendocument.spreadsheet",
+    "jsonl",
+    "parquet",
+    # mime types
     "text/csv",
+    "application/csv",
+    "text/tsv",
     "text/tab-separated-values",
     "application/json",
     "application/x-ndjson",
+    "application/ndjson",
+    "application/jsonl",
+    "application/x-jsonlines",
+    "application/parquet",
+    "application/x-parquet",
+    "application/vnd.apache.parquet",
 ]
 
 def get_aircan_badge(resource_id: str, format_: str) -> str:
