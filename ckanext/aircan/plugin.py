@@ -99,7 +99,12 @@ class AircanPlugin(plugins.SingletonPlugin):
         # torn down at end of request) collapses them to a single submit. This
         # deliberately stays in the model layer rather than using flask.g, so it
         # also covers non-Flask callers (CLI, tests).
-        submitted = model.Session.info.setdefault("_aircan_submitted_ids", set())
+        # `model.Session()` returns the current request-scoped Session instance;
+        # `.info` is a real per-session dict (avoids relying on scoped_session
+        # attribute proxying) and survives commits within the request.
+        submitted = model.Session().info.setdefault(
+            "_aircan_submitted_ids", set()
+        )
         if entity.id in submitted:
             log.debug(
                 "Skipping duplicate aircan submit for %s in this request",
