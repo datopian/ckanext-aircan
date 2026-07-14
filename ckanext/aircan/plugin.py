@@ -1,6 +1,7 @@
 import logging
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as tk
+import ckan.model as model
 from ckan.model.domain_object import DomainObjectOperation
 from ckan.model.resource import Resource
 
@@ -88,6 +89,24 @@ class AircanPlugin(plugins.SingletonPlugin):
             last_modified_changed = bool(history.added)
             if not (url_changed or last_modified_changed):
                 return
+
+        # Deduplicate within a single request. A create-with-upload reaches this
+        # hook twice for the same resource — once as `new`, then as `changed`
+        # (url / last_modified set during the same request) — and each call would
+        # fire the aircan DAG, double-loading the data into the datastore. The two
+        # calls arrive on separate commits of the same request-scoped SQLAlchemy
+        # session, so a marker on Session.info (discarded when the session is
+        # torn down at end of request) collapses them to a single submit. This
+        # deliberately stays in the model layer rather than using flask.g, so it
+        # also covers non-Flask callers (CLI, tests).
+        submitted = model.Session.info.setdefault("_aircan_submitted_ids", set())
+        if entity.id in submitted:
+            log.debug(
+                "Skipping duplicate aircan submit for %s in this request",
+                entity.id,
+            )
+            return
+        submitted.add(entity.id)
 
         context = {
             "ignore_auth": True,
