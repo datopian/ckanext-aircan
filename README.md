@@ -86,11 +86,11 @@ This extension adds three CKAN Action API endpoints:
 * **`/api/3/action/aircan_status`**
   Returns the status of the **most recent** Airflow DAG run for a specified CKAN **resource**.
 
-* **`/api/3/action/aircan_status_update`**
+* **`/api/3/action/aircan_hook`**
   Updates (or appends) progress logs on CKAN for a resource based on messages emitted during an Airflow DAG run.
 
 
-Example request body used by `aircan_status_update` (and/or as the shape of a status/log record):
+Example request body used by `aircan_hook` (and/or as the shape of a status/log record):
 
 ```json
 {

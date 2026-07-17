@@ -8,6 +8,8 @@ import requests
 
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as tk
+import ckan.lib.search as search
+from ckan import model
 
 from ckanext.aircan import interfaces
 from ckanext.aircan.lib.airflow import AirflowClient
@@ -100,7 +102,7 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         dag_run = client.trigger_dag(conf=payload)
         dag_run_id = dag_run.get("dag_run_id")
         context.update({"session": context["model"].meta.create_local_session()})
-        tk.get_action("aircan_status_update")(
+        tk.get_action("aircan_hook")(
             context,
             {
                 "resource_id": data_dict.get("id"),
@@ -178,9 +180,53 @@ def aircan_status(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     return task_status
 
 
-def aircan_status_update(context, data_dict):
+def update_resource_metadata(resource_id, update_dict):
     """
-    Update task status for an 'aircan' task and append a log entry.
+    Set appropriate datastore_active flag on CKAN resource.
+
+    Called after the Aircan DAG has ingested data into the DataStore.
+    """
+    # We're modifying the resource extra directly here to avoid a
+    # race condition, see ckan/ckan#3245 for details and plan for a
+    # better fix
+    q = (
+        model.Session.query(model.Resource)
+        .with_for_update(of=model.Resource)
+        .filter(model.Resource.id == resource_id)
+    )
+    resource = q.one()
+
+    # update extras in database for record
+    extras = dict(resource.extras or {})
+    extras.update(update_dict)
+    q.update({"extras": extras}, synchronize_session=False)
+
+    model.Session.commit()
+
+    # get package with updated resource from solr
+    # find changed resource, patch it and reindex package
+    psi = search.PackageSearchIndex()
+    solr_query = search.PackageSearchQuery()
+    q = {
+        "q": 'id:"{0}"'.format(resource.package_id),
+        "fl": "data_dict",
+        "wt": "json",
+        "fq": 'site_id:"%s"' % tk.config.get("ckan.site_id"),
+        "rows": 1,
+    }
+    for record in solr_query.run(q)["results"]:
+        solr_data_dict = json.loads(record["data_dict"])
+        for res in solr_data_dict["resources"]:
+            if res["id"] == resource_id:
+                res.update(update_dict)
+                psi.index_package(solr_data_dict)
+                break
+
+
+def aircan_hook(context, data_dict):
+    """
+    Update Aircan task. This action is typically called by Airflow DAG
+    to update task status for an 'aircan' task and append a log entry.
 
     Expected data_dict keys:
       - resource_id (required)
@@ -197,7 +243,7 @@ def aircan_status_update(context, data_dict):
     if not resource_id:
         raise tk.ValidationError({"resource_id": ["Missing resource_id"]})
 
-    tk.check_access("aircan_status_update", context, {"resource_id": resource_id})
+    tk.check_access("aircan_hook", context, {"resource_id": resource_id})
 
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
@@ -237,6 +283,16 @@ def aircan_status_update(context, data_dict):
 
     error_payload = message if is_error else None
 
+    if state == "success" and not is_error:
+        # the DAG ingested the data successfully, so mark the resource's
+        # data as available in the datastore
+        try:
+            update_resource_metadata(resource_id, {"datastore_active": True})
+        except Exception:
+            log.exception(
+                "Failed to set datastore_active flag for resource_id=%s", resource_id
+            )
+
     task_dict = {
         "entity_id": resource_id,
         "entity_type": "resource",
@@ -256,5 +312,5 @@ def get_actions():
     return {
         "aircan_submit": aircan_submit,
         "aircan_status": aircan_status,
-        "aircan_status_update": aircan_status_update,
+        "aircan_hook": aircan_hook,
     }
