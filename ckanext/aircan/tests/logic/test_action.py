@@ -40,6 +40,7 @@ class TestAircanSubmit:
         assert value["dag_run_id"] == "test-dag-run-id"
         assert len(value["logs"]) == 1
 
+    @pytest.mark.usefixtures("with_request_context")
     def test_submit_rejects_disallowed_format(self, mock_airflow_client):
         dataset = factories.Dataset()
 
@@ -52,6 +53,7 @@ class TestAircanSubmit:
             )
         mock_airflow_client.trigger_dag.assert_not_called()
 
+    @pytest.mark.usefixtures("with_request_context")
     def test_submit_rejects_datastore_managed_resources(self, mock_airflow_client):
         dataset = factories.Dataset()
 
@@ -105,12 +107,15 @@ class TestAircanHook:
         dataset = factories.Dataset()
         resource = factories.Resource(package_id=dataset["id"], format="CSV")
 
+        # clear_logs drops the "queued" entry written when the resource
+        # creation auto-submitted the pipeline
         result = test_helpers.call_action(
             "aircan_hook",
             resource_id=resource["id"],
             dag_run_id="run-1",
             state="running",
             message="Ingestion started",
+            clear_logs=True,
         )
         assert result["state"] == "running"
         assert result["entity_id"] == resource["id"]

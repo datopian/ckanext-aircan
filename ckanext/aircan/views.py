@@ -39,6 +39,10 @@ class ResourcePipelineController(MethodView):
                 resource_dict,
             )
 
+        except logic.NotAuthorized:
+            return tk.abort(403, tk._("Not authorized to run the pipeline"))
+        except logic.NotFound:
+            return tk.abort(404, tk._("Resource not found"))
         except requests.ConnectionError:
             tk.h.flash_error(
                 tk._("Unable to connect to Airflow. Please check the connection settings.")
