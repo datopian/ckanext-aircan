@@ -1,0 +1,209 @@
+{% extends "package/resource_edit_base.html" %}
+{% import 'macros/form.html' as form %}
+
+
+{% block subtitle %}{{ h.dataset_display_name(pkg) }} - {{ h.resource_display_name(res) }}{% endblock %}
+
+{% block primary_content_inner %}
+{% set action = h.url_for('aircan.resource_pipeline', id=pkg.name, resource_id=res.id) %}
+
+{# ---- Status presentation helpers ---- #}
+{% set state = status.state if status and status.state else 'unknown' %}
+
+{% set badge_class_map = {
+  'success': 'bg-success',
+  'running': 'bg-info',
+  'pending': 'bg-warning text-dark',
+  'queued': 'bg-warning text-dark',
+  'failed': 'bg-danger',
+  'scheduled': 'bg-primary',
+  'unknown': 'bg-secondary'
+} %}
+
+{% set icon_map = {
+  'success': 'fa-check',
+  'running': 'fa-spinner fa-spin',
+  'pending': 'fa-clock',
+  'queued': 'fa-clock',
+  'failed': 'fa-times',
+  'scheduled': 'fa-calendar',
+  'unknown': 'fa-info'
+} %}
+
+{% set circle_class_map = {
+  'success': 'text-success',
+  'running': 'text-info',
+  'pending': 'text-warning',
+  'queued': 'text-warning',
+  'failed': 'text-danger',
+  'scheduled': 'text-primary',
+  'unknown': 'text-secondary'
+} %}
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start">
+      <div class="me-3">
+        <div class="d-flex align-items-center gap-2 mb-1" aria-live="polite">
+          <span class="badge {{ badge_class_map.get(state, 'bg-secondary') }} text-uppercase">
+            {{ _(state) }}
+          </span>
+
+          {% if state == 'running' %}
+            <span class="small text-muted" role="status">
+              <i class="fa fa-spinner fa-spin me-1"></i>{{ _('Pipeline is running…') }}
+            </span>
+          {% elif state == 'queued' %}
+            <span class="small text-muted">
+              <i class="fa fa-clock me-1"></i>{{ _('Queued / waiting to run') }}
+            </span>
+          {% elif state == 'success' %}
+            <span class="small text-muted">
+              <i class="fa fa-check me-1"></i>{{ _('Last run completed') }}
+            </span>
+          {% elif state == 'failed' %}
+            <span class="small text-muted">
+              <i class="fa fa-triangle-exclamation me-1"></i>{{ _('Last run failed') }}
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="small text-muted">
+          <strong class="text-body">{{ _('Last updated:') }}</strong>
+          {% if status and status.state and status.last_updated %}
+            <time datetime="{{ h.render_datetime(status.last_updated, with_hours=True) }}"
+                  title="{{ h.render_datetime(status.last_updated, with_hours=True) }}">
+              {{ h.time_ago_from_timestamp(status.last_updated) }}
+            </time>
+          {% else %}
+            {{ _('Never') }}
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <form method="post" action="{{ action }}" class="m-0">
+          {{ h.csrf_input() }}
+          <button class="btn btn-primary"
+                  name="save"
+                  type="submit"
+              {% if state in ['running', 'queued', 'pending'] %}disabled aria-disabled="true"{% endif %}>
+            <i class="fa fa-diagram-project me-1"></i>
+            {{ _('Run Data Pipeline') }}
+          </button>
+        </form>
+
+        <a class="btn btn-outline-secondary" href="">
+          <i class="fa fa-rotate-right me-1"></i>{{ _('Refresh') }}
+        </a>
+      </div>
+    </div>
+
+    {% if state == 'running' %}
+      <div class="progress mt-3" style="height: .4rem;" aria-hidden="true">
+        <div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if status and status.error %}
+  <div class="alert alert-danger d-flex align-items-start gap-2" role="alert">
+    <i class="fa fa-triangle-exclamation mt-1"></i>
+    <div>
+      <div class="fw-semibold">{{ _('Pipeline error') }}</div>
+      <div class="small">{{ status.error.message }}</div>
+    </div>
+  </div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <div class="fw-semibold">{{ _('Pipeline Details') }}</div>
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">{{ _('Status') }}</dt>
+      <dd class="col-sm-9 mb-2">
+        <span class="badge {{ badge_class_map.get(state, 'bg-secondary') }}">
+          {{ _(state) | capitalize }}
+        </span>
+      </dd>
+
+      <dt class="col-sm-3">{{ _('Last updated') }}</dt>
+      <dd class="col-sm-9 mb-0">
+        {% if status and status.state and status.last_updated %}
+          <span class="date"
+                title="{{ h.render_datetime(status.last_updated, with_hours=True) }}">
+            {{ h.time_ago_from_timestamp(status.last_updated) }}
+          </span>
+        {% else %}
+          {{ _('Never') }}
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+
+{# ---- Logs ---- #}
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <div class="fw-semibold">{{ _('Pipeline Log') }}</div>
+    {% if status and status.logs %}
+      <span class="badge bg-light text-muted border">{{ status.logs|length }}</span>
+    {% endif %}
+  </div>
+
+  {% if status and status.logs %}
+    <ul class="list-group list-group-flush">
+      {% for item in status.logs %}
+        <li class="list-group-item">
+          <div class="d-flex gap-3 align-items-start">
+            <span class="fa-stack flex-shrink-0" style="width: 2.2rem;">
+              <i class="fa fa-circle fa-stack-2x text-info opacity-75"></i>
+              <i class="fa fa-info-circle fa-stack-1x fa-inverse"></i>
+            </span>
+
+            <div class="flex-grow-1">
+              <div class="small text-muted mb-1">
+                <time datetime="{{ h.render_datetime(item.datetime, with_hours=True) }}"
+                      title="{{ h.render_datetime(item.datetime, with_hours=True) }}">
+                  {{ h.time_ago_from_timestamp(item.datetime) }}
+                </time>
+              </div>
+
+              <div class="small font-monospace mb-0">
+                {% for line in item.message.strip().split('\n') %}
+                  {{ line | urlize }}{% if not loop.last %}<br />{% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </li>
+      {% endfor %}
+
+      {# End marker #}
+      <li class="list-group-item">
+        <div class="d-flex align-items-center gap-3">
+          <span class="fa-stack flex-shrink-0" style="width: 2.2rem;">
+            <i class="fa fa-circle fa-stack-2x {{ circle_class_map.get(state, 'text-secondary') }} opacity-75"></i>
+            <i class="fa {{ icon_map.get(state, 'fa-info') }} fa-stack-1x fa-inverse"></i>
+          </span>
+          <div class="fw-semibold">
+            {{ _(state|capitalize) if status and status.state else _('End of log') }}
+          </div>
+        </div>
+      </li>
+    </ul>
+  {% else %}
+    <div class="card-body">
+      <div class="text-muted d-flex align-items-center gap-2">
+        <i class="fa fa-circle-info"></i>
+        <span>{{ _('No logs yet. Run the pipeline to generate output.') }}</span>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+

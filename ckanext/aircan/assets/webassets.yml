@@ -1,0 +1,11 @@
+aircan-css:
+  filter: cssrewrite
+  output: ckanext-aircan/%(version)s-aircan.css
+  contents:
+    - css/frictionless-report.css
+
+aircan-js:
+  filter: rjsmin
+  output: ckanext-aircan/%(version)s-aircan.js
+  contents:
+    - js/frictionless-report.js

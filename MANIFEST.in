@@ -1,4 +1,6 @@
 include README.rst
 include LICENSE
 include requirements.txt
-recursive-include ckanext/aircan_connector *.html *.json *.js *.less *.css *.mo
+recursive-include ckanext/aircan *.html *.json *.js *.less *.css *.mo *.yml
+recursive-include ckanext/aircan/migration *.ini *.py *.mako
+recursive-include ckanext/aircan/public *.*

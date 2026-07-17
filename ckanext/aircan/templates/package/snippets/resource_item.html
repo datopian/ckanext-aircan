@@ -1,0 +1,6 @@
+{% ckan_extends %}
+
+{% block resource_item_title %}
+  {{ super() }}
+  {{ h.get_aircan_badge(res.id, res.format) | safe }}
+{% endblock %}
