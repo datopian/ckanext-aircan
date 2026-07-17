@@ -45,6 +45,21 @@ class TestAircanAuth:
             "aircan_status", context=context, resource_id=resource["id"]
         )
 
+    def test_aircan_status_denied_for_anonymous_on_private_resource(
+        self, mock_airflow_client
+    ):
+        user = factories.User()
+        org = factories.Organization(
+            users=[{"name": user["name"], "capacity": "editor"}]
+        )
+        dataset = factories.Dataset(owner_org=org["id"], private=True)
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        context = {"user": "", "model": model}
+        with pytest.raises(tk.NotAuthorized):
+            test_helpers.call_auth(
+                "aircan_status", context=context, resource_id=resource["id"]
+            )
+
     def test_aircan_hook_allowed_for_editor(self, mock_airflow_client):
         user, resource = self._editor_with_resource()
         context = {"user": user["name"], "model": model}
