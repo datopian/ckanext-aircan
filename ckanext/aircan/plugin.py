@@ -1,4 +1,6 @@
 import logging
+import time
+
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as tk
 from ckan.model.domain_object import DomainObjectOperation
@@ -88,7 +90,7 @@ class AircanPlugin(plugins.SingletonPlugin):
             last_modified_changed = bool(history.added)
             if not (url_changed or last_modified_changed):
                 return
-
+        print("================== AircanPlugin.notify called for resource id:", entity.id)
         context = {
             "ignore_auth": True,
         }
@@ -100,12 +102,52 @@ class AircanPlugin(plugins.SingletonPlugin):
         )
         self._self_aircan_submit(resource_dict)
 
+    # CKAN can notify the same resource more than once per request: on file
+    # uploads the new resource ends up in both the "new" and "changed" object
+    # caches of DomainObjectModificationExtension (core only filters that for
+    # packages), which used to trigger the DAG twice. All auto-submissions
+    # therefore pass through a short in-process dedup window.
+    _recent_submissions = {}
+    _DEDUP_WINDOW_SECONDS = 10
+
+    def _submitted_recently(self, resource_id):
+        now = time.monotonic()
+        self._recent_submissions = {
+            rid: ts
+            for rid, ts in self._recent_submissions.items()
+            if now - ts < self._DEDUP_WINDOW_SECONDS
+        }
+        if resource_id in self._recent_submissions:
+            return True
+        self._recent_submissions[resource_id] = now
+        return False
+
     def _self_aircan_submit(self, resource_dict):
         """
-        Re-submit the resource to Aircan for processing.
+        Submit the resource to Aircan for processing.
+
+        Runs inside CKAN's commit hooks, so it must never raise: a failure
+        to reach Airflow (or an unsupported format) must not break the
+        resource create/update that triggered it.
         """
+        resource_id = resource_dict.get("id")
+
+        if resource_dict.get("url_type") == "datastore":
+            return
+        if not tk.h.allowed_aircan_format(resource_dict.get("format")):
+            return
+        if self._submitted_recently(resource_id):
+            log.debug(
+                "Skipping duplicate aircan submission for resource %s",
+                resource_id,
+            )
+            return
+
         context = {"ignore_auth": True, "defer_commit": True}
-        tk.get_action("aircan_submit")(context, resource_dict)
+        try:
+            tk.get_action("aircan_submit")(context, resource_dict)
+        except Exception:
+            log.exception("Failed to submit resource %s to Aircan", resource_id)
 
     # IAuthFunctions
     def get_auth_functions(self):
