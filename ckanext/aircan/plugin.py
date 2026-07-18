@@ -90,7 +90,6 @@ class AircanPlugin(plugins.SingletonPlugin):
             last_modified_changed = bool(history.added)
             if not (url_changed or last_modified_changed):
                 return
-        print("================== AircanPlugin.notify called for resource id:", entity.id)
         context = {
             "ignore_auth": True,
         }
