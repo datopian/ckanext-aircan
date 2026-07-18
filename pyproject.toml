@@ -1,6 +1,6 @@
 [project]
 name = "ckanext-aircan"
-version = "2.0.0"
+version = "2.0.1"
 description = "The custom extension for notifying(triggering) the Airflow DAG about the data to be uploaded to DataStore"
 readme = "README.md"
 authors = [
