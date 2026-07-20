@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -13,12 +14,62 @@ from ckanext.aircan import interfaces
 
 log = logging.getLogger(__name__)
 
+# Ingestion modes that load into the *existing* datastore/BigQuery table rather
+# than rebuilding it. For these, an existing column's type cannot change:
+# BigQuery cannot re-type a column in place, that is only possible with a full
+# "replace" (which rebuilds the table).
+_TYPE_LOCKING_MODES = ("append", "upsert")
+
+
+def _parse_schema(schema):
+    """Return a Table Schema descriptor as a dict, or None when there is
+    nothing to inspect. Accepts either a dict or a JSON string (both occur
+    depending on the caller)."""
+    if not schema:
+        return None
+    if isinstance(schema, str):
+        try:
+            schema = json.loads(schema)
+        except (ValueError, TypeError):
+            return None
+    if not isinstance(schema, dict):
+        return None
+    return schema
+
+
+def _fields_by_name(schema):
+    """Map trimmed field name -> field dict for a parsed schema descriptor."""
+    by_name = {}
+    for field in schema.get("fields") or []:
+        if not isinstance(field, dict):
+            continue
+        name = (field.get("name") or "").strip()
+        if name:
+            by_name[name] = field
+    return by_name
+
+
+def _retyped_columns(stored_schema, incoming_schema):
+    """Names of columns present in both schemas whose declared ``type`` differs.
+    New columns (absent from the stored schema) are ignored — they can be added
+    with any type."""
+    stored_fields = _fields_by_name(stored_schema)
+    retyped = []
+    for name, incoming in _fields_by_name(incoming_schema).items():
+        original = stored_fields.get(name)
+        if original is None:
+            continue
+        if (incoming.get("type") or "") != (original.get("type") or ""):
+            retyped.append(name)
+    return retyped
+
 
 class AircanPlugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IConfigurer)
     plugins.implements(plugins.IConfigDeclaration)
     plugins.implements(plugins.IActions)
     plugins.implements(plugins.IAuthFunctions)
+    plugins.implements(plugins.IResourceController, inherit=True)
     plugins.implements(plugins.IDomainObjectModification)
     plugins.implements(plugins.IBlueprint)
     plugins.implements(plugins.ITemplateHelpers)
@@ -68,6 +119,51 @@ class AircanPlugin(plugins.SingletonPlugin):
         declaration.declare(key.ckanext.aircan.s3.key_prefix)
         declaration.declare(key.ckanext.aircan.s3.endpoint_url)
         declaration.declare(key.ckanext.aircan.s3.region)
+
+    # IResourceController
+    def before_resource_update(self, context, current, resource):
+        """Reject a type change to an existing datastore column when ingesting
+        with append/upsert.
+
+        BigQuery cannot re-type an existing column in place, so aircan can only
+        honour a type change under "replace" (which rebuilds the table). The
+        frontend already disables the type inputs in this case; this enforces
+        the same rule before the change is committed, so API and harvester
+        callers cannot smuggle a type change past the pipeline.
+        """
+        # Effective mode: the incoming value wins, otherwise the stored one (a
+        # metadata-only patch may not resend it).
+        mode = resource.get("ingestion_mode") or current.get("ingestion_mode")
+        if mode not in _TYPE_LOCKING_MODES:
+            return
+
+        # Only guard resources that already have a datastore table to protect.
+        # aircan sets this flag once a DAG has loaded data (see
+        # update_resource_metadata); without it there is no existing table and
+        # any type is fine.
+        if not current.get("datastore_active"):
+            return
+
+        incoming_schema = _parse_schema(resource.get("schema"))
+        stored_schema = _parse_schema(current.get("schema"))
+        # No incoming schema (e.g. metadata-only update) or no stored schema to
+        # compare against -> nothing to enforce.
+        if incoming_schema is None or stored_schema is None:
+            return
+
+        retyped = _retyped_columns(stored_schema, incoming_schema)
+        if retyped:
+            raise tk.ValidationError(
+                {
+                    "schema": [
+                        tk._(
+                            "Column type cannot be changed for an existing "
+                            "table when the processing mode is '{mode}': {cols}. "
+                            "Use the 'replace' mode to change column types."
+                        ).format(mode=mode, cols=", ".join(sorted(retyped)))
+                    ]
+                }
+            )
 
     # IDomainObjectModification
     def notify(self, entity, operation):

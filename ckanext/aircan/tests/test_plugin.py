@@ -8,6 +8,8 @@ import ckan.plugins.toolkit as tk
 import ckan.tests.factories as factories
 from ckan.model.domain_object import DomainObjectOperation
 
+from ckanext.aircan.plugin import AircanPlugin, _parse_schema, _retyped_columns
+
 
 @pytest.mark.ckan_config("ckan.plugins", "aircan")
 @pytest.mark.usefixtures("with_plugins")
@@ -76,3 +78,95 @@ class TestAutoSubmit:
         resource = factories.Resource(package_id=dataset["id"], format="CSV")
 
         assert resource["id"]
+
+
+class TestParseSchema:
+    def test_accepts_dict(self):
+        schema = {"fields": [{"name": "a", "type": "integer"}]}
+        assert _parse_schema(schema) == schema
+
+    def test_accepts_json_string(self):
+        assert _parse_schema('{"fields": []}') == {"fields": []}
+
+    @pytest.mark.parametrize(
+        "value", [None, "", {}, [], "not json", "[1, 2]", 5]
+    )
+    def test_returns_none_for_unusable_input(self, value):
+        assert _parse_schema(value) is None
+
+
+class TestRetypedColumns:
+    STORED = {"fields": [{"name": "a", "type": "integer"},
+                         {"name": "b", "type": "string"}]}
+
+    def test_no_change(self):
+        assert _retyped_columns(self.STORED, self.STORED) == []
+
+    def test_detects_changed_type(self):
+        incoming = {"fields": [{"name": "a", "type": "string"},
+                              {"name": "b", "type": "string"}]}
+        assert _retyped_columns(self.STORED, incoming) == ["a"]
+
+    def test_new_column_is_allowed(self):
+        incoming = {"fields": [{"name": "a", "type": "integer"},
+                              {"name": "b", "type": "string"},
+                              {"name": "c", "type": "number"}]}
+        assert _retyped_columns(self.STORED, incoming) == []
+
+    def test_matches_names_after_trimming(self):
+        incoming = {"fields": [{"name": " a ", "type": "string"}]}
+        assert _retyped_columns(self.STORED, incoming) == ["a"]
+
+    def test_dropped_column_is_not_reported(self):
+        incoming = {"fields": [{"name": "b", "type": "string"}]}
+        assert _retyped_columns(self.STORED, incoming) == []
+
+
+class TestTypeLockOnUpdate:
+    """before_resource_update rejects a type change to an existing datastore
+    column under append/upsert, but allows it under replace / for new
+    columns / when there is no existing table."""
+
+    STORED = {"fields": [{"name": "a", "type": "integer"},
+                         {"name": "b", "type": "string"}]}
+    RETYPE = {"fields": [{"name": "a", "type": "string"},
+                        {"name": "b", "type": "string"}]}
+
+    def _run(self, current, resource):
+        AircanPlugin().before_resource_update({}, current, resource)
+
+    @pytest.mark.parametrize("mode", ["append", "upsert"])
+    def test_retype_rejected_for_append_and_upsert(self, mode):
+        current = {"datastore_active": True, "ingestion_mode": mode,
+                   "schema": self.STORED}
+        with pytest.raises(tk.ValidationError) as exc:
+            self._run(current, {"ingestion_mode": mode, "schema": self.RETYPE})
+        assert "schema" in exc.value.error_dict
+
+    def test_retype_allowed_for_replace(self):
+        current = {"datastore_active": True, "ingestion_mode": "replace",
+                   "schema": self.STORED}
+        self._run(current, {"ingestion_mode": "replace", "schema": self.RETYPE})
+
+    def test_retype_allowed_without_existing_table(self):
+        current = {"ingestion_mode": "append", "schema": self.STORED}
+        self._run(current, {"ingestion_mode": "append", "schema": self.RETYPE})
+
+    def test_new_column_allowed_on_append(self):
+        incoming = {"fields": self.STORED["fields"] +
+                    [{"name": "c", "type": "number"}]}
+        current = {"datastore_active": True, "ingestion_mode": "append",
+                   "schema": self.STORED}
+        self._run(current, {"ingestion_mode": "append", "schema": incoming})
+
+    def test_metadata_only_update_allowed(self):
+        current = {"datastore_active": True, "ingestion_mode": "append",
+                   "schema": self.STORED}
+        self._run(current, {"description": "changed"})
+
+    def test_mode_falls_back_to_stored_value(self):
+        # Incoming patch omits the mode; the stored append mode still locks it.
+        current = {"datastore_active": True, "ingestion_mode": "append",
+                   "schema": self.STORED}
+        with pytest.raises(tk.ValidationError):
+            self._run(current, {"schema": self.RETYPE})
