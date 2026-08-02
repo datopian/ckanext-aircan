@@ -116,7 +116,9 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
         return {
             'aircan_submit': action.aircan_submit,
             'aircan_status': action.aircan_status,
-            'aircan_status_update': action.aircan_status_update
+            'aircan_status_update': action.aircan_status_update,
+            'aircan_clear_stale_precision_warnings':
+                action.aircan_clear_stale_precision_warnings,
             #'datastore_info': action.datastore_info
         }
 
@@ -129,7 +131,9 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
     def get_auth_functions(self):
         return {
             'aircan_submit': auth.aircan_submit,
-            'aircan_status': auth.aircan_status
+            'aircan_status': auth.aircan_status,
+            'aircan_clear_stale_precision_warnings':
+                auth.aircan_clear_stale_precision_warnings
         }
 
     

@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 import ast
 
 import csv
+import hashlib
 import io
 import logging
 import json
@@ -60,29 +61,103 @@ def _get_editor_user_email(context, pacakge_id):
 _NUMERIC_SCHEMA_TYPES = {'number', 'integer', 'float'}
 
 
+def _parse_table_schema(schema):
+    """Return a resource's Table Schema as a dict, or {} if unusable."""
+    if isinstance(schema, dict):
+        return schema
+    if not schema:
+        return {}
+    try:
+        return json.loads(schema)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        try:
+            return ast.literal_eval(schema)
+        except Exception:
+            return {}
+
+
+def _numeric_field_names(schema):
+    """Names of the fields the precision check can possibly flag."""
+    return {
+        f.get('name') for f in (_parse_table_schema(schema).get('fields') or [])
+        if (f.get('type') or '').lower() in _NUMERIC_SCHEMA_TYPES
+    }
+
+
+def precision_check_fingerprint(resource_hash, schema):
+    """Identity of everything the precision verdict depends on.
+
+    Keying the cache on the file hash alone is what made a precision warning
+    permanent: the remedy the warning asks for is a *schema* change (retype the
+    column to string), which leaves the file -- and so the hash -- untouched.
+    The check was therefore skipped forever and the obsolete warning could never
+    be cleared. Folding the numeric-typed field set into the key means fixing the
+    schema invalidates the cache and the verdict gets recomputed.
+    """
+    numeric = sorted(
+        '{0}:{1}'.format(f.get('name'), (f.get('type') or '').lower())
+        for f in (_parse_table_schema(schema).get('fields') or [])
+        if (f.get('type') or '').lower() in _NUMERIC_SCHEMA_TYPES
+    )
+    payload = '{0}|{1}'.format(resource_hash or '', ','.join(numeric))
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+def _store_precision_state(model, resource_id, fingerprint, suspect_fields):
+    """Record the precision verdict on the resource's extras.
+
+    Writes extras directly instead of going through resource_update, which would
+    re-enter IResourceController.after_resource_update and kick off another full
+    re-ingest of the file.
+    """
+    if model is None or not resource_id:
+        return
+    try:
+        res_obj = model.Resource.get(resource_id)
+        if not res_obj:
+            return
+        extras = dict(res_obj.extras or {})
+        if suspect_fields:
+            extras['precision_warning'] = ', '.join(sorted(suspect_fields))
+        else:
+            extras.pop('precision_warning', None)
+        extras['precision_check_hash'] = fingerprint
+        res_obj.extras = extras
+        model.Session.commit()
+    except Exception as exc:
+        log.warning(
+            'Could not update precision state on resource %s: %s', resource_id, exc
+        )
+
+
 def _sample_csv_for_precision_risk(download_href, schema, sample_rows=100):
     """
     Stream the first sample_rows rows of the CSV at download_href.
-    Return a list of field names (typed as numeric in schema) whose values
-    exceed JS_MAX_SAFE_INTEGER in the sample.
-    Returns [] on any error so it never blocks ingestion.
+
+    Returns:
+      list of field names -- those numeric-typed fields whose sampled values
+                             exceed JS_MAX_SAFE_INTEGER
+      []                  -- checked, definitively nothing at risk
+      None                -- could NOT check (no file, unreadable schema,
+                             download or decode failure)
+
+    The distinction between [] and None matters: callers clear a stored warning
+    on [], and a failed download must never be mistaken for "all clear".
     """
     if not download_href or not schema:
-        return []
+        return None
 
-    try:
-        schema_dict = json.loads(schema) if isinstance(schema, str) else schema
-    except (json.JSONDecodeError, ValueError):
-        try:
-            schema_dict = ast.literal_eval(schema)
-        except Exception:
-            return []
+    schema_dict = _parse_table_schema(schema)
+    if not schema_dict:
+        return None
 
     numeric_fields = {
         f['name'] for f in schema_dict.get('fields', [])
         if f.get('type', '').lower() in _NUMERIC_SCHEMA_TYPES
     }
 
+    # No numeric column can hold an oversized value: a definitive all-clear,
+    # and the state a resource lands in once its columns have been retyped.
     if not numeric_fields:
         return []
 
@@ -99,7 +174,7 @@ def _sample_csv_for_precision_risk(download_href, schema, sample_rows=100):
         response.close()
 
         if not lines:
-            return []
+            return None
 
         reader = csv.DictReader(io.StringIO('\n'.join(lines)))
         suspect = set()
@@ -125,7 +200,7 @@ def _sample_csv_for_precision_risk(download_href, schema, sample_rows=100):
         log.warning(
             'Could not sample CSV for precision check at %s: %s', download_href, exc
         )
-        return []
+        return None
 
 
 def upload_to_gcp(download_url, org, pacakge_name, resource):
@@ -431,19 +506,21 @@ def aircan_submit(context, data_dict):
     ckan_resource = data_dict.get('resource_json', {})
     ckan_resource_url = get_action('get_resource_download_spec')(context, {'resource': ckan_resource})
 
-    # Check CSV sample for numeric fields with values that exceed JS MAX_SAFE_INTEGER.
-    # Only runs when the file is new or changed — skips schema-only edits to avoid
-    # adding latency on every save. Hash comparison is done via resource extras.
+    # Check a CSV sample for numeric fields holding values past JS MAX_SAFE_INTEGER.
+    # The verdict is cached against a fingerprint of the file hash AND the numeric
+    # columns, so an unchanged file is not re-downloaded on every save, while a
+    # schema fix still forces a re-check (see precision_check_fingerprint).
     resource_id = ckan_resource.get('id')
     current_hash = ckan_resource.get('hash', '')
     download_href = ckan_resource_url.get('href') if isinstance(ckan_resource_url, dict) else None
+    fingerprint = precision_check_fingerprint(current_hash, ckan_resource.get('schema', {}))
 
     skip_check = False
     if resource_id and current_hash:
         try:
             res_obj = context['model'].Resource.get(resource_id)
-            if res_obj and res_obj.extras.get('precision_check_hash') == current_hash:
-                skip_check = True  # same file as last check, no need to re-download
+            if res_obj and res_obj.extras.get('precision_check_hash') == fingerprint:
+                skip_check = True  # same file and same numeric columns as last check
         except Exception:
             pass
 
@@ -466,28 +543,16 @@ def aircan_submit(context, data_dict):
                 msg,
             )
             h.flash_notice(msg)
-            if resource_id:
-                try:
-                    res_obj = context['model'].Resource.get(resource_id)
-                    if res_obj:
-                        extras = dict(res_obj.extras or {})
-                        extras['precision_warning'] = ', '.join(suspect_fields)
-                        extras['precision_check_hash'] = current_hash
-                        res_obj.extras = extras
-                        context['model'].Session.commit()
-                except Exception as exc:
-                    log.warning('Could not store precision_warning on resource %s: %s', resource_id, exc)
-        elif download_href and resource_id:
-            try:
-                res_obj = context['model'].Resource.get(resource_id)
-                if res_obj:
-                    extras = dict(res_obj.extras or {})
-                    extras.pop('precision_warning', None)
-                    extras['precision_check_hash'] = current_hash
-                    res_obj.extras = extras
-                    context['model'].Session.commit()
-            except Exception as exc:
-                log.warning('Could not clear precision_warning on resource %s: %s', resource_id, exc)
+            _store_precision_state(
+                context.get('model'), resource_id, fingerprint, suspect_fields
+            )
+        elif suspect_fields is not None:
+            # Definitive all-clear -- drop any warning left over from a previous
+            # file or from a schema that has since been corrected.
+            _store_precision_state(context.get('model'), resource_id, fingerprint, [])
+        # suspect_fields is None: the check could not run (no file, unreadable
+        # schema, download failure). Leave the stored state alone rather than
+        # letting a transient failure read as "all clear".
 
     job = jobs.enqueue(aircan_submit_job, [{
         'editor_user_email': editor_user_email,
@@ -662,3 +727,103 @@ def app_context():
         yield context
     finally:
         context.pop()
+
+
+def aircan_clear_stale_precision_warnings(context, data_dict):
+    '''Clear precision warnings that the resource's own schema has outgrown.
+
+    A stored ``precision_warning`` is stale once none of the fields it names are
+    numeric in the resource's current Table Schema any more -- i.e. the retype
+    the warning asked for has been done, so the values are no longer at risk.
+    Those warnings cannot clear themselves on resources whose file never changes
+    again, which is why they need sweeping once.
+
+    Extras are written directly, so this does NOT re-ingest anything and does not
+    touch BigQuery. Sysadmin only.
+
+    :param resource_id: limit to one resource (optional; default: every resource
+        carrying a precision_warning)
+    :type resource_id: string
+    :param dry_run: report without writing (optional, default True)
+    :type dry_run: bool
+    '''
+    check_access('aircan_clear_stale_precision_warnings', context, data_dict)
+    model = context['model']
+    dry_run = asbool(data_dict.get('dry_run', True))
+    resource_id = data_dict.get('resource_id')
+
+    query = model.Session.query(model.Resource).filter(
+        model.Resource.state == 'active'
+    )
+    if resource_id:
+        query = query.filter(model.Resource.id == resource_id)
+
+    stale, still_valid, unreadable = [], [], []
+    for res_obj in query:
+        extras = dict(res_obj.extras or {})
+        warning = extras.get('precision_warning')
+        if not warning:
+            continue
+
+        entry = {
+            'resource_id': res_obj.id,
+            'resource_name': res_obj.name,
+            'package_id': res_obj.package_id,
+            'precision_warning': warning,
+        }
+
+        # Read the Table Schema from extras, falling back to resource_show in
+        # case a schema is not stored there. Without a readable schema every
+        # warning would look resolved and be cleared -- so refuse to judge it
+        # instead of guessing, and report it for a human to look at.
+        table_schema = _parse_table_schema(extras.get('schema'))
+        if not table_schema.get('fields'):
+            try:
+                shown = get_action('resource_show')(
+                    {'model': model, 'ignore_auth': True}, {'id': res_obj.id}
+                )
+                table_schema = _parse_table_schema(shown.get('schema'))
+            except Exception as exc:
+                log.warning('Could not load schema for resource %s: %s', res_obj.id, exc)
+                table_schema = {}
+        if not table_schema.get('fields'):
+            entry['reason'] = 'no readable Table Schema; warning left untouched'
+            unreadable.append(entry)
+            continue
+
+        flagged = {f.strip() for f in warning.split(',') if f.strip()}
+        numeric = _numeric_field_names(table_schema)
+        unresolved = sorted(flagged & numeric)
+
+        if unresolved:
+            # At least one flagged column is still numeric: the warning is real.
+            entry['still_numeric'] = unresolved
+            still_valid.append(entry)
+            continue
+
+        stale.append(entry)
+        if not dry_run:
+            extras.pop('precision_warning', None)
+            # Drop the cache key too, so the next genuine ingest recomputes the
+            # verdict from scratch instead of trusting a stale fingerprint.
+            extras.pop('precision_check_hash', None)
+            res_obj.extras = extras
+
+    if not dry_run and stale:
+        model.Session.commit()
+
+    log.info(
+        'aircan_clear_stale_precision_warnings: %s stale, %s still valid, '
+        '%s unreadable (dry_run=%s)',
+        len(stale), len(still_valid), len(unreadable), dry_run,
+    )
+    return {
+        'dry_run': dry_run,
+        'cleared_count': 0 if dry_run else len(stale),
+        'stale_count': len(stale),
+        'stale': stale,
+        'still_valid_count': len(still_valid),
+        'still_valid': still_valid,
+        'unreadable_count': len(unreadable),
+        'unreadable': unreadable,
+    }

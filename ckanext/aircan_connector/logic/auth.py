@@ -27,3 +27,13 @@ def aircan_submit(context, data_dict):
 
 def aircan_status(context, data_dict):
     return aircan_auth(context, data_dict)
+
+
+def aircan_clear_stale_precision_warnings(context, data_dict):
+    # Sweeps across every resource, so it is sysadmin-only. CKAN grants
+    # sysadmins access regardless of what an auth function returns, so denying
+    # everyone here is exactly "sysadmin only".
+    return {
+        'success': False,
+        'msg': p.toolkit._('Only sysadmins can clear precision warnings in bulk'),
+    }
