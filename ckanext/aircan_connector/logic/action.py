@@ -108,8 +108,8 @@ def aircan_submit(context, data_dict):
         bq_table_name = ckan_resource.get('bq_table_name')
         log.debug("bq_table_name: {}".format(bq_table_name))
         dag_run_id = str(uuid.uuid4())
-        
-        payload = { 
+
+        payload = {
             "dag_run_id": dag_run_id,
             "conf": {
                 "resource": {
@@ -207,7 +207,23 @@ def aircan_submit(context, data_dict):
         log.error(NO_SCHEMA_ERROR_MESSAGE)
         h.flash_error(NO_SCHEMA_ERROR_MESSAGE.format(ckan_resource_url, ckan_resource_name), allow_html=True)
     except Exception as e:
-        return {"success": False, "errors": [e]}
+        # Never swallow this silently: a failed submission looks identical to a
+        # successful upload otherwise - no log line, no status change, no alert.
+        failed_res_id = data_dict.get('resource_id', '')
+        log.exception(
+            'Aircan submission failed for resource {0}: {1}'.format(failed_res_id, e))
+        try:
+            p.toolkit.get_action('aircan_status_update')(context, {
+                'resource_id': failed_res_id,
+                'state': 'error',
+                'message': 'Failed to submit resource to Airflow: {0}'.format(e),
+                'error': {'message': str(e)},
+                'clear_logs': True
+            })
+        except Exception:
+            log.exception(
+                'Could not record aircan error status for resource {0}'.format(failed_res_id))
+        return {"success": False, "errors": [str(e)]}
 
 def aircan_dag_status(dag_name, dag_run_id):
     client = AirflowClient(config, {})

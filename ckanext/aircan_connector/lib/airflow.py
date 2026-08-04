@@ -120,25 +120,45 @@ class AirflowClient(object):
         kwargs['headers'] = headers
         return requests.request(method, url, **kwargs)
 
+    # Airflow 3 enforces uniqueness of (dag_id, logical_date). A second-resolution
+    # timestamp made every trigger arriving in the same second collide, and the
+    # rejection was invisible because the caller discards the exception. Use
+    # microsecond resolution, and retry a conflict with a freshly generated
+    # logical_date / dag_run_id.
+    TRIGGER_CONFLICT_RETRIES = 3
+
+    def _new_logical_date(self):
+        return datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
     def trigger_dag(self):
         log.info('Trigger DAG - {} on {}'.format(self.dag_id, self.server_type))
         payload = dict(self.payload)
         payload.setdefault('dag_run_id', str(uuid.uuid4()))
         if self.api_version == 'v2':
-            payload.setdefault(
-                'logical_date',
-                datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-            )
+            payload.setdefault('logical_date', self._new_logical_date())
         endpoint = '/api/{}/dags/{}/dagRuns'.format(self.api_version, self.dag_id)
         log.info('DAG trigger URL: {}'.format(self._join_url(endpoint)))
-        resp = self.request('POST', endpoint, json=payload)
-        if resp.status_code in (200, 201):
-            return resp.json()
-        if resp.status_code == 403:
-            raise Exception(
-                'Service account does not have permission to access the Airflow web server.')
-        raise Exception('Bad response from application: {!r} / {!r} / {!r}'.format(
-            resp.status_code, resp.headers, resp.text))
+
+        for attempt in range(1, self.TRIGGER_CONFLICT_RETRIES + 1):
+            resp = self.request('POST', endpoint, json=payload)
+            if resp.status_code in (200, 201):
+                log.info('DAG run {} created for {} (attempt {})'.format(
+                    payload.get('dag_run_id'), self.dag_id, attempt))
+                return resp.json()
+            if resp.status_code == 403:
+                raise Exception(
+                    'Service account does not have permission to access the Airflow web server.')
+            if resp.status_code == 409 and attempt < self.TRIGGER_CONFLICT_RETRIES:
+                # Another DAG run already claimed this logical_date / dag_run_id.
+                log.warning(
+                    'DAG run conflict (409) for {} on attempt {}: {!r}. Retrying '
+                    'with a new logical_date.'.format(self.dag_id, attempt, resp.text))
+                payload['dag_run_id'] = str(uuid.uuid4())
+                if self.api_version == 'v2':
+                    payload['logical_date'] = self._new_logical_date()
+                continue
+            raise Exception('Bad response from application: {!r} / {!r} / {!r}'.format(
+                resp.status_code, resp.headers, resp.text))
 
     def get_dag_run(self, dag_run_id):
         endpoint = '/api/{}/dags/{}/dagRuns/{}'.format(self.api_version, self.dag_id, dag_run_id)
