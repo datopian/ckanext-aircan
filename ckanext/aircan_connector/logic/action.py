@@ -341,7 +341,8 @@ def aircan_status(context, data_dict):
                     config.get('ckan.airflow.cloud.dag_name',
                     'ckan_api_load_multiple_steps'), 
                     dag_run_id)['airflow_api_aircan_status'] 
-
+                    
+            dag_status.pop('conf', None)
             airflow_to_ckan_state = {
                 'queued': 'pending',
                 'running':'progress',
