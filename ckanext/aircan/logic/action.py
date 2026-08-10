@@ -17,6 +17,32 @@ from ckanext.aircan.lib.airflow import AirflowClient
 log = logging.getLogger(__name__)
 
 
+def _changed_by(context):
+    """Return safe user identity fields for the downstream Airflow payload."""
+    actor = context.get("aircan_actor")
+    if actor:
+        return actor
+
+    user_obj = context.get("auth_user_obj")
+    user_name = context.get("user")
+    user_id = getattr(user_obj, "id", None)
+    email = getattr(user_obj, "email", None)
+
+    if isinstance(user_obj, dict):
+        user_id = user_obj.get("id")
+        user_name = user_name or user_obj.get("name")
+        email = user_obj.get("email")
+
+    if not user_id and not user_name:
+        return None
+
+    return {
+        "id": user_id,
+        "name": user_name or getattr(user_obj, "name", None),
+        "email": email,
+    }
+
+
 def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Submit a resource to Airflow for processing via Aircan DAG.
@@ -91,6 +117,9 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             "region": tk.config.get("ckanext.aircan.s3.region"),
         },
     }
+    changed_by = _changed_by(context)
+    if changed_by:
+        payload["changed_by"] = changed_by
 
     for plugin in plugins.PluginImplementations(interfaces.IAircan):
         plugin.update_payload(context, payload)

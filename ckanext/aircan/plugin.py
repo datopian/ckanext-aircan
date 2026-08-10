@@ -195,7 +195,24 @@ class AircanPlugin(plugins.SingletonPlugin):
                 "id": entity.id,
             },
         )
-        self._self_aircan_submit(resource_dict)
+        self._self_aircan_submit(resource_dict, self._current_actor())
+
+    @staticmethod
+    def _current_actor():
+        """Capture safe identity fields before the commit hook loses context."""
+        user_obj = getattr(tk.c, "userobj", None)
+        user_name = getattr(tk.c, "user", None)
+        user_id = getattr(user_obj, "id", None)
+        email = getattr(user_obj, "email", None)
+
+        if not user_id and not user_name:
+            return None
+
+        return {
+            "id": user_id,
+            "name": user_name or getattr(user_obj, "name", None),
+            "email": email,
+        }
 
     # CKAN can notify the same resource more than once per request: on file
     # uploads the new resource ends up in both the "new" and "changed" object
@@ -217,7 +234,7 @@ class AircanPlugin(plugins.SingletonPlugin):
         self._recent_submissions[resource_id] = now
         return False
 
-    def _self_aircan_submit(self, resource_dict):
+    def _self_aircan_submit(self, resource_dict, actor=None):
         """
         Submit the resource to Aircan for processing.
 
@@ -239,6 +256,8 @@ class AircanPlugin(plugins.SingletonPlugin):
             return
 
         context = {"ignore_auth": True, "defer_commit": True}
+        if actor:
+            context["aircan_actor"] = actor
         try:
             tk.get_action("aircan_submit")(context, resource_dict)
         except Exception:
