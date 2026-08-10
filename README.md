@@ -113,6 +113,9 @@ Example request body used by `aircan_hook` (and/or as the shape of a status/log 
 * **`error`** *(string|null, optional)*: Error details (use `null` when not applicable).
 * **`clear_logs`** *(boolean, optional)*: If `true`, clears existing logs otherwise appends to them keep a history.
 
+Aircan submissions also include `changed_by` when CKAN has an authenticated
+actor. It contains the actor's `id`, `name`, and `email`.
+
 ## Extending Aircan payload 
 You can extend the payload sent to Airflow by implementing the `IAircan` interface in your own CKAN plugin.
 
