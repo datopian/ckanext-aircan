@@ -200,8 +200,13 @@ class AircanPlugin(plugins.SingletonPlugin):
     @staticmethod
     def _current_actor():
         """Capture safe identity fields before the commit hook loses context."""
-        user_obj = getattr(tk.c, "userobj", None)
-        user_name = getattr(tk.c, "user", None)
+        try:
+            user_obj = getattr(tk.c, "userobj", None)
+            user_name = getattr(tk.c, "user", None)
+        except RuntimeError:
+            # Domain modification callbacks can run outside a request context.
+            return None
+
         user_id = getattr(user_obj, "id", None)
         email = getattr(user_obj, "email", None)
 
