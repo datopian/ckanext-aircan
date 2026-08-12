@@ -17,30 +17,19 @@ from ckanext.aircan.lib.airflow import AirflowClient
 log = logging.getLogger(__name__)
 
 
-def _changed_by(context):
-    """Return safe user identity fields for the downstream Airflow payload."""
-    actor = context.get("aircan_actor")
-    if actor:
-        return actor
+def _notification_email(context):
+    """Return the current user's email for pipeline failure notifications."""
+    email = context.get("aircan_notification_email")
+    if email:
+        return email
 
     user_obj = context.get("auth_user_obj")
-    user_name = context.get("user")
-    user_id = getattr(user_obj, "id", None)
     email = getattr(user_obj, "email", None)
 
     if isinstance(user_obj, dict):
-        user_id = user_obj.get("id")
-        user_name = user_name or user_obj.get("name")
         email = user_obj.get("email")
 
-    if not user_id and not user_name:
-        return None
-
-    return {
-        "id": user_id,
-        "name": user_name or getattr(user_obj, "name", None),
-        "email": email,
-    }
+    return email
 
 
 def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -117,9 +106,12 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             "region": tk.config.get("ckanext.aircan.s3.region"),
         },
     }
-    changed_by = _changed_by(context)
-    if changed_by:
-        payload["changed_by"] = changed_by
+    notification_email = _notification_email(context)
+    recipients = payload["others_config"]["notification_to_email"]
+    notify_editor = "editor" in recipients
+    recipients[:] = [recipient for recipient in recipients if recipient != "editor"]
+    if notify_editor and notification_email and notification_email not in recipients:
+        recipients.append(notification_email)
 
     for plugin in plugins.PluginImplementations(interfaces.IAircan):
         plugin.update_payload(context, payload)

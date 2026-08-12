@@ -195,29 +195,18 @@ class AircanPlugin(plugins.SingletonPlugin):
                 "id": entity.id,
             },
         )
-        self._self_aircan_submit(resource_dict, self._current_actor())
+        self._self_aircan_submit(resource_dict, self._current_user_email())
 
     @staticmethod
-    def _current_actor():
-        """Capture safe identity fields before the commit hook loses context."""
+    def _current_user_email():
+        """Capture the notification email before the commit hook loses context."""
         try:
             user_obj = getattr(tk.c, "userobj", None)
-            user_name = getattr(tk.c, "user", None)
         except RuntimeError:
             # Domain modification callbacks can run outside a request context.
             return None
 
-        user_id = getattr(user_obj, "id", None)
-        email = getattr(user_obj, "email", None)
-
-        if not user_id and not user_name:
-            return None
-
-        return {
-            "id": user_id,
-            "name": user_name or getattr(user_obj, "name", None),
-            "email": email,
-        }
+        return getattr(user_obj, "email", None)
 
     # CKAN can notify the same resource more than once per request: on file
     # uploads the new resource ends up in both the "new" and "changed" object
@@ -239,7 +228,7 @@ class AircanPlugin(plugins.SingletonPlugin):
         self._recent_submissions[resource_id] = now
         return False
 
-    def _self_aircan_submit(self, resource_dict, actor=None):
+    def _self_aircan_submit(self, resource_dict, notification_email=None):
         """
         Submit the resource to Aircan for processing.
 
@@ -261,8 +250,8 @@ class AircanPlugin(plugins.SingletonPlugin):
             return
 
         context = {"ignore_auth": True, "defer_commit": True}
-        if actor:
-            context["aircan_actor"] = actor
+        if notification_email:
+            context["aircan_notification_email"] = notification_email
         try:
             tk.get_action("aircan_submit")(context, resource_dict)
         except Exception:
