@@ -8,6 +8,42 @@ from werkzeug.exceptions import HTTPException
 import ckan.plugins.toolkit as tk
 import ckan.tests.factories as factories
 import ckan.tests.helpers as test_helpers
+from ckanext.aircan.logic import action
+
+
+@pytest.mark.parametrize(
+    ("global_value", "package_value", "expected"),
+    [
+        (True, "true", True),
+        (True, "false", False),
+        (True, None, True),
+        (False, "true", False),
+    ],
+)
+def test_validate_records_enabled(
+    monkeypatch, global_value, package_value, expected
+):
+    monkeypatch.setattr(
+        action.tk.config,
+        "get",
+        lambda key, default=None: global_value
+        if key == "ckanext.aircan.validate_records"
+        else default,
+    )
+
+    def package_show(_context, _data_dict):
+        return {"aircan_validate_records": package_value}
+
+    monkeypatch.setattr(
+        action.tk,
+        "get_action",
+        lambda name: package_show if name == "package_show" else None,
+    )
+
+    assert (
+        action._validate_records_enabled({}, {"package_id": "package-id"})
+        is expected
+    )
 
 
 @pytest.mark.ckan_config("ckan.plugins", "aircan")

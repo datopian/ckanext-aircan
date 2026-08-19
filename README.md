@@ -61,6 +61,7 @@ ckanext.aircan.gcs.signed_url_expiration_seconds = 3600
 ckanext.aircan.chunk_size = 104857600
 ckanext.aircan.skip_leading_rows = 1
 ckan.aircan.temp_table_prefix = _temp_
+ckanext.aircan.validate_records = true
 ckanext.aircan.notification_to_email = ops@example.com editor
 ckanext.aircan.notification_from_email =
 
@@ -116,6 +117,10 @@ Example request body used by `aircan_hook` (and/or as the shape of a status/log 
 `ckanext.aircan.notification_to_email` accepts whitespace-separated addresses.
 Add the `editor` token to notify the authenticated user who changed the dataset;
 the token is replaced by that user's email in the Aircan submission.
+
+When validation is enabled globally, a dataset may opt out by setting its
+`aircan_validate_records` metadata field to `false`. Missing metadata defaults
+to enabled, and a dataset cannot enable validation when it is disabled globally.
 
 ## Extending Aircan payload 
 You can extend the payload sent to Airflow by implementing the `IAircan` interface in your own CKAN plugin.

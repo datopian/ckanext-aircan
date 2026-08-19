@@ -32,6 +32,21 @@ def _notification_email(context):
     return email
 
 
+def _validate_records_enabled(context, data_dict: Dict[str, Any]) -> bool:
+    globally_enabled = tk.asbool(
+        tk.config.get("ckanext.aircan.validate_records", True)
+    )
+    package_id = data_dict.get("package_id")
+    if not globally_enabled or not package_id:
+        return globally_enabled
+
+    package = tk.get_action("package_show")(context, {"id": package_id})
+    package_setting = package.get("aircan_validate_records")
+    if package_setting in (None, ""):
+        return True
+    return tk.asbool(package_setting)
+
+
 def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Submit a resource to Airflow for processing via Aircan DAG.
@@ -89,9 +104,7 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
                 tk.config.get("ckanext.aircan.notification_to_email") or ""
             ).split()
             or [],
-            "validate_records": tk.asbool(
-                tk.config.get("ckanext.aircan.validate_records", True)
-            ),
+            "validate_records": _validate_records_enabled(context, data_dict),
             "notification_from_email": tk.config.get(
                 "ckanext.aircan.notification_from_email"
             ),
