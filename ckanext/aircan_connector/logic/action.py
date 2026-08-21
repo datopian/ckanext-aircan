@@ -168,12 +168,22 @@ def aircan_submit(context, data_dict):
                     {'resource_id': ckan_resource['id']})
             updated = datetime.datetime.strptime(aircan_status['last_updated'],'%Y-%m-%dT%H:%M:%S.%f')
             time_since_last_updated = datetime.datetime.utcnow() - updated
-            wait_till = datetime.timedelta(minutes=int(10))
-            # wait for the next 10 minutes if already submitted.
+            wait_till = datetime.timedelta(
+                minutes=int(config.get('ckanext.aircan.duplicate_hold_minutes', 2)))
+            # Hold a re-submission of the same file while a job is still running,
+            # to swallow accidental double submits. A new file always carries new
+            # data, so it must never be skipped: several files can legitimately
+            # arrive seconds apart and each one needs its own DAG run. Every
+            # upload replaces the resource file, so last_modified moves whenever
+            # the file changes; when either side is unknown the file is treated
+            # as new rather than risk dropping data.
+            current_file = ckan_resource.get('last_modified')
+            in_flight_file = aircan_status.get('triggered_for')
             if aircan_status.get('status', '') in ['pending', 'progress'] and  \
-                    time_since_last_updated < wait_till:
-                status_msg = 'A pending task was found {0} for this resource, so \
-                                skipping this duplicate task'.format(ckan_resource['id'])
+                    time_since_last_updated < wait_till and \
+                    in_flight_file and in_flight_file == current_file:
+                status_msg = 'A pending task was found {0} for this resource with the \
+                                same file, so skipping this duplicate task'.format(ckan_resource['id'])
                 log.info(status_msg)
                 h.flash_error(status_msg)
                 return False
@@ -196,6 +206,9 @@ def aircan_submit(context, data_dict):
             'dag_run_id': dag_run_id,
             'resource_id': res_id,
             'state': 'pending',
+            # recorded so the duplicate guard can tell a re-submission of the
+            # same file from a genuinely new one
+            'value': {'triggered_for': ckan_resource.get('last_modified')},
             'message': 'Added to the queue to be processed with run id \"{0}\"'.format(dag_run_id),
             'clear_logs': True
         })
