@@ -257,6 +257,28 @@ def update_resource_metadata(resource_id, update_dict):
                 break
 
 
+def _create_datastore_views(context, resource_id):
+    """
+    Create the default views flagged with `requires_datastore` for a resource.
+
+    Only view types listed in `ckan.views.default_views` are considered, and
+    view types already present on the resource are skipped, so it is safe to
+    call this on every successful ingestion.
+    """
+    resource_dict = tk.get_action("resource_show")(context, {"id": resource_id})
+    dataset_dict = tk.get_action("package_show")(
+        context, {"id": resource_dict["package_id"]}
+    )
+    return tk.get_action("resource_create_default_resource_views")(
+        context,
+        {
+            "resource": resource_dict,
+            "package": dataset_dict,
+            "create_datastore_views": True,
+        },
+    )
+
+
 def aircan_hook(context, data_dict):
     """
     Update Aircan task. This action is typically called by Airflow DAG
@@ -325,6 +347,15 @@ def aircan_hook(context, data_dict):
         except Exception:
             log.exception(
                 "Failed to set datastore_active flag for resource_id=%s", resource_id
+            )
+
+        # create the default views that need the data in the datastore
+        # (e.g. datatables_view), mirroring what ckanext-datapusher does
+        try:
+            _create_datastore_views(dict(context), resource_id)
+        except Exception:
+            log.exception(
+                "Failed to create datastore views for resource_id=%s", resource_id
             )
 
     task_dict = {

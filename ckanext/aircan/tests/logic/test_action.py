@@ -226,3 +226,48 @@ class TestAircanHook:
 
         shown = test_helpers.call_action("resource_show", id=resource["id"])
         assert shown["datastore_active"]
+
+
+@pytest.mark.ckan_config("ckan.plugins", "aircan datatables_view")
+@pytest.mark.ckan_config("ckan.views.default_views", "datatables_view")
+@pytest.mark.usefixtures("with_plugins", "clean_db")
+class TestAircanHookDatastoreViews:
+    def _view_types(self, resource_id):
+        views = test_helpers.call_action("resource_view_list", id=resource_id)
+        return [view["view_type"] for view in views]
+
+    def test_success_creates_datastore_views(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        # datastore views are not created on resource creation
+        assert "datatables_view" not in self._view_types(resource["id"])
+
+        test_helpers.call_action(
+            "aircan_hook", resource_id=resource["id"], state="success"
+        )
+
+        assert self._view_types(resource["id"]).count("datatables_view") == 1
+
+    def test_repeated_success_does_not_duplicate_views(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+
+        for _ in range(2):
+            test_helpers.call_action(
+                "aircan_hook", resource_id=resource["id"], state="success"
+            )
+
+        assert self._view_types(resource["id"]).count("datatables_view") == 1
+
+    def test_non_success_does_not_create_views(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+
+        test_helpers.call_action(
+            "aircan_hook", resource_id=resource["id"], state="running"
+        )
+        test_helpers.call_action(
+            "aircan_hook", resource_id=resource["id"], state="success", type="error"
+        )
+
+        assert "datatables_view" not in self._view_types(resource["id"])
