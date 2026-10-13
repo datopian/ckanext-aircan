@@ -89,6 +89,9 @@ This extension adds three CKAN Action API endpoints:
 
 * **`/api/3/action/aircan_hook`**
   Updates (or appends) progress logs on CKAN for a resource based on messages emitted during an Airflow DAG run.
+  When called with `"state": "success"`, it sets the resource's `datastore_active` flag and creates the default
+  views that require the DataStore (those in `ckan.views.default_views` flagged `requires_datastore`, e.g.
+  `datatables_view`), like ckanext-datapusher does.
 
 
 Example request body used by `aircan_hook` (and/or as the shape of a status/log record):
