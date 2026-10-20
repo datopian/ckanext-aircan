@@ -248,6 +248,35 @@ class TestAircanHookDatastoreViews:
 
         assert self._view_types(resource["id"]).count("datatables_view") == 1
 
+    def test_success_creates_views_when_read_misses_flag(
+        self, mock_airflow_client, monkeypatch
+    ):
+        # A read right after the flag is written can still return the old
+        # resource (e.g. a stale search-index copy); the views must not depend
+        # on it.
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        get_action = action.tk.get_action
+
+        def stale_resource_show(context, data_dict):
+            resource_dict = get_action("resource_show")(context, data_dict)
+            resource_dict.pop("datastore_active", None)
+            return resource_dict
+
+        monkeypatch.setattr(
+            action.tk,
+            "get_action",
+            lambda name: stale_resource_show
+            if name == "resource_show"
+            else get_action(name),
+        )
+
+        test_helpers.call_action(
+            "aircan_hook", resource_id=resource["id"], state="success"
+        )
+
+        assert self._view_types(resource["id"]).count("datatables_view") == 1
+
     def test_repeated_success_does_not_duplicate_views(self, mock_airflow_client):
         dataset = factories.Dataset()
         resource = factories.Resource(package_id=dataset["id"], format="CSV")
