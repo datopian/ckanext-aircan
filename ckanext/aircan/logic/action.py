@@ -264,12 +264,22 @@ def _create_datastore_views(context, resource_id):
     Only view types listed in `ckan.views.default_views` are considered, and
     view types already present on the resource are skipped, so it is safe to
     call this on every successful ingestion.
+
+    Called right after update_resource_metadata, which writes the flag with a
+    raw SQL update and patches the search index by hand. The dicts are read
+    with use_cache=False so package_show goes to the database instead of the
+    search index's cached copy, and datastore_active is set on the resource
+    dict explicitly: view plugins such as recline_view only offer a view when
+    it is true, and a read that misses the fresh flag made them silently skip
+    the view.
     """
+    context = dict(context, use_cache=False)
     resource_dict = tk.get_action("resource_show")(context, {"id": resource_id})
+    resource_dict["datastore_active"] = True
     dataset_dict = tk.get_action("package_show")(
         context, {"id": resource_dict["package_id"]}
     )
-    return tk.get_action("resource_create_default_resource_views")(
+    views = tk.get_action("resource_create_default_resource_views")(
         context,
         {
             "resource": resource_dict,
@@ -277,6 +287,12 @@ def _create_datastore_views(context, resource_id):
             "create_datastore_views": True,
         },
     )
+    log.info(
+        "Created datastore views for resource_id=%s: %s",
+        resource_id,
+        [view["view_type"] for view in views] or "none",
+    )
+    return views
 
 
 def aircan_hook(context, data_dict):
