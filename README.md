@@ -64,6 +64,7 @@ ckan.aircan.temp_table_prefix = _temp_
 ckanext.aircan.validate_records = true
 ckanext.aircan.notification_to_email = ops@example.com editor
 ckanext.aircan.notification_from_email =
+ckanext.aircan.frontend_url = https://portal.example.com
 
 ```
 
@@ -116,6 +117,11 @@ Example request body used by `aircan_hook` (and/or as the shape of a status/log 
 * **`type`** *(string, optional)*: Log level/category, e.g. `info`, `warning`, `error`. Default is `info`.
 * **`error`** *(string|null, optional)*: Error details (use `null` when not applicable).
 * **`clear_logs`** *(boolean, optional)*: If `true`, clears existing logs otherwise appends to them keep a history.
+
+`ckanext.aircan.frontend_url` is optional. When set, the payload carries
+`others_config.validation_report_url`
+(`<frontend_url>/datasets/<dataset name>/resources/<resource id>/validation-report`)
+so failure emails can link to the validation report in the frontend.
 
 `ckanext.aircan.notification_to_email` accepts whitespace-separated addresses.
 Add the `editor` token to notify the authenticated user who changed the dataset;

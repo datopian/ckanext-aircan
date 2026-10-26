@@ -47,6 +47,22 @@ def _validate_records_enabled(context, data_dict: Dict[str, Any]) -> bool:
     return tk.asbool(package_setting)
 
 
+def _validation_report_url(context, data_dict: Dict[str, Any]) -> str:
+    """Frontend link to the resource's validation report, or "" when no
+    frontend is configured. Failure emails put this link in front of users, who
+    work in the frontend rather than the CKAN UI."""
+    frontend_url = (tk.config.get("ckanext.aircan.frontend_url") or "").rstrip("/")
+    package_id = data_dict.get("package_id")
+    if not frontend_url or not package_id or not data_dict.get("id"):
+        return ""
+
+    # The frontend routes datasets by name, not id.
+    package = tk.get_action("package_show")(context, {"id": package_id})
+    return "{}/datasets/{}/resources/{}/validation-report".format(
+        frontend_url, package["name"], data_dict["id"]
+    )
+
+
 def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Submit a resource to Airflow for processing via Aircan DAG.
@@ -105,6 +121,7 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             ).split()
             or [],
             "validate_records": _validate_records_enabled(context, data_dict),
+            "validation_report_url": _validation_report_url(context, data_dict),
             "notification_from_email": tk.config.get(
                 "ckanext.aircan.notification_from_email"
             ),
