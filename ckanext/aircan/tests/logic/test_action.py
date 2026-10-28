@@ -46,6 +46,42 @@ def test_validate_records_enabled(
     )
 
 
+@pytest.mark.parametrize(
+    ("frontend_url", "expected"),
+    [
+        ("https://portal.example.com/", "https://portal.example.com/datasets/my-ds/resources/res-1/validation-report"),
+        ("", ""),
+        (None, ""),
+    ],
+)
+def test_validation_report_url(monkeypatch, frontend_url, expected):
+    monkeypatch.setattr(
+        action.tk.config,
+        "get",
+        lambda key, default=None: frontend_url
+        if key == "ckanext.aircan.frontend_url"
+        else default,
+    )
+    monkeypatch.setattr(
+        action.tk,
+        "get_action",
+        lambda name: (lambda _c, _d: {"name": "my-ds"}),
+    )
+
+    assert (
+        action._validation_report_url({}, {"id": "res-1", "package_id": "pkg-id"})
+        == expected
+    )
+
+
+def test_validation_report_url_needs_package_id(monkeypatch):
+    monkeypatch.setattr(
+        action.tk.config, "get", lambda key, default=None: "https://portal.example.com"
+    )
+
+    assert action._validation_report_url({}, {"id": "res-1"}) == ""
+
+
 @pytest.mark.ckan_config("ckan.plugins", "aircan")
 @pytest.mark.usefixtures("with_plugins", "clean_db")
 class TestAircanSubmit:
