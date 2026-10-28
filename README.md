@@ -65,6 +65,7 @@ ckanext.aircan.validate_records = true
 ckanext.aircan.notification_to_email = ops@example.com editor
 ckanext.aircan.notification_from_email =
 ckanext.aircan.frontend_url = https://portal.example.com
+ckanext.aircan.organization_name = Example Org
 
 ```
 
@@ -122,6 +123,10 @@ Example request body used by `aircan_hook` (and/or as the shape of a status/log 
 `others_config.validation_report_url`
 (`<frontend_url>/datasets/<dataset name>/resources/<resource id>/validation-report`)
 so failure emails can link to the validation report in the frontend.
+
+`ckanext.aircan.organization_name` is optional. When set, the payload carries
+`others_config.organization_name` and failure emails put it at the start of the
+subject title, for example `[Alert] Example Org Aircan data pipeline failure: ...`.
 
 `ckanext.aircan.notification_to_email` accepts whitespace-separated addresses.
 Add the `editor` token to notify the authenticated user who changed the dataset;

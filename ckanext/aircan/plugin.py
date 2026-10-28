@@ -107,6 +107,7 @@ class AircanPlugin(plugins.SingletonPlugin):
         declaration.declare(key.ckanext.aircan.notification_to_email)
         declaration.declare(key.ckanext.aircan.notification_from_email)
         declaration.declare(key.ckanext.aircan.frontend_url)
+        declaration.declare(key.ckanext.aircan.organization_name)
 
         declaration.annotate("Google Cloud Storage configuration")
         declaration.declare(key.ckanext.aircan.gcs.project_id)
