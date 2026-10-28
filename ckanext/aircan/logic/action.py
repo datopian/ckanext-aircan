@@ -122,6 +122,8 @@ def aircan_submit(context, data_dict: Dict[str, Any]) -> Dict[str, Any]:
             or [],
             "validate_records": _validate_records_enabled(context, data_dict),
             "validation_report_url": _validation_report_url(context, data_dict),
+            "organization_name": tk.config.get("ckanext.aircan.organization_name")
+            or "",
             "notification_from_email": tk.config.get(
                 "ckanext.aircan.notification_from_email"
             ),
