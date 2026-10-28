@@ -80,6 +80,7 @@ class AircanPlugin(plugins.SingletonPlugin):
         tk.add_template_directory(config_, "templates")
         tk.add_public_directory(config_, "public")
         tk.add_resource("assets", "aircan")
+        action.register_activity_types()
 
     # IConfigDeclaration
     def declare_config_options(self, declaration, key):
