@@ -10,11 +10,38 @@ import ckan.plugins as plugins
 import ckan.plugins.toolkit as tk
 import ckan.lib.search as search
 from ckan import model
+from ckan.lib.plugins import get_permission_labels
 
 from ckanext.aircan import interfaces
 from ckanext.aircan.lib.airflow import AirflowClient
 
 log = logging.getLogger(__name__)
+
+# Activity types recorded on the dataset when a pipeline run ends. They end in
+# "package" on purpose: the activity extension only applies permission labels
+# to activity types ending in "package", and the labels are what keep failed
+# ingestions away from users outside the dataset's organization.
+INGESTION_SUCCEEDED_ACTIVITY = "ingestion succeeded package"
+INGESTION_FAILED_ACTIVITY = "ingestion failed package"
+
+
+def register_activity_types():
+    """Let the activity extension accept the ingestion activity types.
+
+    The activity extension has no hook for new types, so they are added to
+    the dicts its activity_type and object_id validators look up. Adding them
+    to VALIDATORS_PACKAGE_ACTIVITY_TYPES also lists them in its type filter.
+    """
+    try:
+        from ckanext.activity.logic import validators
+    except ImportError:
+        return
+
+    for activity_type in (INGESTION_SUCCEEDED_ACTIVITY, INGESTION_FAILED_ACTIVITY):
+        validators.VALIDATORS_PACKAGE_ACTIVITY_TYPES[activity_type] = (
+            "package_id_exists"
+        )
+        validators.object_id_validators[activity_type] = "package_id_exists"
 
 
 def _notification_email(context):
@@ -314,6 +341,97 @@ def _create_datastore_views(context, resource_id):
     return views
 
 
+def _failure_permission_labels(package):
+    """Permission labels that limit an activity to the dataset's own people.
+
+    The dataset's labels minus "public", plus its organization's members (or
+    its creator when it has no organization). Sysadmins see every activity.
+    """
+    labels = {
+        label
+        for label in get_permission_labels().get_dataset_labels(package)
+        if label != "public"
+    }
+    if package.owner_org:
+        labels.add(f"member-{package.owner_org}")
+    elif package.creator_user_id:
+        labels.add(f"creator-{package.creator_user_id}")
+    return sorted(labels)
+
+
+def _parse_error(message):
+    """The DAG sends the error payload as a JSON string; keep it structured."""
+    try:
+        return json.loads(message)
+    except (TypeError, ValueError):
+        return message
+
+
+def _record_ingestion_activity(
+    context, resource_id, succeeded, dag_run_id, logs, error
+):
+    """
+    Record the outcome of a pipeline run in the dataset's activity stream.
+
+    The activity's data carries the run's logs (the ones the data pipeline
+    panel shows) and, for failures, the error. Failures only get labels for
+    the dataset's organization, so public users never see them. Like CKAN's
+    own package activities, the data also holds a full package snapshot:
+    activity diffs compare an activity with the one before it on the same
+    dataset, whatever its type.
+
+    Returns True when an activity was created.
+    """
+    resource = model.Resource.get(resource_id)
+    package = model.Package.get(resource.package_id) if resource else None
+    if package is None:
+        return False
+
+    user = model.User.get(context.get("user") or "")
+    if user is None:
+        site_user = tk.get_action("get_site_user")({"ignore_auth": True}, {})
+        user = model.User.get(site_user["name"])
+
+    package_dict = tk.get_action("package_show")(
+        {"ignore_auth": True, "for_view": False, "use_cache": False},
+        {"id": package.id, "include_tracking": False},
+    )
+
+    data = {
+        "package": package_dict,
+        "actor": user.name,
+        # ckanext-neso stamps the channel from the request's API token, which
+        # would label the pipeline's own calls as "api"
+        "channel": "system",
+        "resource": {
+            "id": resource.id,
+            "name": resource.name,
+            "format": resource.format,
+        },
+        "dag_run_id": dag_run_id,
+        "logs": logs,
+    }
+    if succeeded:
+        activity_type = INGESTION_SUCCEEDED_ACTIVITY
+        permission_labels = get_permission_labels().get_dataset_labels(package)
+    else:
+        activity_type = INGESTION_FAILED_ACTIVITY
+        permission_labels = _failure_permission_labels(package)
+        data["error"] = error
+
+    activity = tk.get_action("activity_create")(
+        {"ignore_auth": True},
+        {
+            "user_id": user.id,
+            "object_id": package.id,
+            "activity_type": activity_type,
+            "data": data,
+            "permission_labels": permission_labels,
+        },
+    )
+    return activity is not None
+
+
 def aircan_hook(context, data_dict):
     """
     Update Aircan task. This action is typically called by Airflow DAG
@@ -347,6 +465,9 @@ def aircan_hook(context, data_dict):
     clear_logs = tk.asbool(data_dict.get("clear_logs", False))
 
     logs = []
+    # outcome of the run already recorded in the activity stream, so a retried
+    # or duplicated final call doesn't record it twice
+    recorded_outcome = None
     if not clear_logs:
         try:
             show_res = tk.get_action("task_status_show")(
@@ -358,6 +479,7 @@ def aircan_hook(context, data_dict):
                 parsed = json.loads(value)
                 logs = parsed.get("logs") or []
                 dag_run_id = parsed.get("dag_run_id", dag_run_id)
+                recorded_outcome = parsed.get("recorded_outcome")
                 if not isinstance(logs, list):
                     logs = []
         except Exception:
@@ -367,8 +489,6 @@ def aircan_hook(context, data_dict):
 
     if _type != "error":
         logs.append({"datetime": now, "message": message})
-
-    value = {"dag_run_id": dag_run_id, "logs": logs}
 
     is_error = _type == "error"
 
@@ -392,6 +512,33 @@ def aircan_hook(context, data_dict):
             log.exception(
                 "Failed to create datastore views for resource_id=%s", resource_id
             )
+
+    if is_error:
+        outcome = "failed"
+    elif state == "success":
+        outcome = "success"
+    else:
+        outcome = None
+    if outcome and outcome != recorded_outcome:
+        try:
+            if _record_ingestion_activity(
+                context,
+                resource_id,
+                succeeded=outcome == "success",
+                dag_run_id=dag_run_id,
+                logs=logs,
+                error=_parse_error(message) if is_error else None,
+            ):
+                recorded_outcome = outcome
+        except Exception:
+            model.Session.rollback()
+            log.exception(
+                "Failed to record ingestion activity for resource_id=%s", resource_id
+            )
+
+    value = {"dag_run_id": dag_run_id, "logs": logs}
+    if recorded_outcome:
+        value["recorded_outcome"] = recorded_outcome
 
     task_dict = {
         "entity_id": resource_id,

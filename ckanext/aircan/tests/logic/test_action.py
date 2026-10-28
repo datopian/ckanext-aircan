@@ -336,3 +336,161 @@ class TestAircanHookDatastoreViews:
         )
 
         assert "datatables_view" not in self._view_types(resource["id"])
+
+
+@pytest.fixture
+def clean_activity_db(clean_db, migrate_db_for):
+    """clean_db plus the activity plugin's migrations, as CKAN's own activity
+    tests do."""
+    migrate_db_for("activity")
+
+
+@pytest.mark.ckan_config("ckan.plugins", "aircan activity")
+@pytest.mark.usefixtures("with_plugins", "clean_activity_db")
+class TestAircanHookActivities:
+    @pytest.fixture(autouse=True)
+    def _pipeline_user(self, with_plugins, clean_activity_db):
+        # The DAG calls the hook with a service account's API token. Calls
+        # made as the site user would be hidden from activity lists.
+        self.pipeline_user = factories.Sysadmin()
+
+    def _hook(self, **kwargs):
+        return test_helpers.call_action(
+            "aircan_hook", context={"user": self.pipeline_user["name"]}, **kwargs
+        )
+
+    def _start_run(self, resource_id, dag_run_id="run-1"):
+        self._hook(
+            resource_id=resource_id,
+            dag_run_id=dag_run_id,
+            state="queued",
+            message="Queued",
+            clear_logs=True,
+        )
+
+    def _ingestion_activities(self, dataset_id, user=None, **kwargs):
+        # lists as the (sysadmin) pipeline user unless told otherwise; the
+        # default call_action caller is treated as anonymous by the labels
+        if user is None:
+            user = self.pipeline_user["name"]
+        kwargs["context"] = {"user": user, "ignore_auth": False}
+        return test_helpers.call_action(
+            "package_activity_list",
+            id=dataset_id,
+            activity_types=[
+                action.INGESTION_SUCCEEDED_ACTIVITY,
+                action.INGESTION_FAILED_ACTIVITY,
+            ],
+            **kwargs,
+        )
+
+    def test_success_records_activity_with_logs(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        self._start_run(resource["id"])
+
+        self._hook(
+            resource_id=resource["id"],
+            state="success",
+            message="Pipeline completed successfully",
+        )
+
+        [activity] = self._ingestion_activities(dataset["id"], include_data=True)
+        assert activity["activity_type"] == action.INGESTION_SUCCEEDED_ACTIVITY
+        assert activity["user_id"] == self.pipeline_user["id"]
+        data = activity["data"]
+        assert data["resource"]["id"] == resource["id"]
+        assert data["dag_run_id"] == "run-1"
+        assert data["channel"] == "system"
+        assert [entry["message"] for entry in data["logs"]] == [
+            "Queued",
+            "Pipeline completed successfully",
+        ]
+        assert "error" not in data
+        # the snapshot is taken after the datastore flag is set
+        assert data["package"]["resources"][0]["datastore_active"]
+
+    def test_failure_records_activity_with_error(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        self._start_run(resource["id"])
+
+        self._hook(
+            resource_id=resource["id"],
+            state="failed",
+            type="error",
+            message=json.dumps({"message": "Bad row 3"}),
+        )
+
+        [activity] = self._ingestion_activities(dataset["id"], include_data=True)
+        assert activity["activity_type"] == action.INGESTION_FAILED_ACTIVITY
+        assert activity["data"]["error"] == {"message": "Bad row 3"}
+        assert [entry["message"] for entry in activity["data"]["logs"]] == [
+            "Queued"
+        ]
+
+    def test_failure_is_hidden_from_public_users(self, mock_airflow_client):
+        member = factories.User()
+        outsider = factories.User()
+        organization = factories.Organization(
+            users=[{"name": member["name"], "capacity": "member"}]
+        )
+        dataset = factories.Dataset(owner_org=organization["id"])
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        self._start_run(resource["id"])
+
+        self._hook(resource_id=resource["id"], type="error", message="Boom")
+
+        assert len(self._ingestion_activities(dataset["id"], user=member["name"])) == 1
+        assert self._ingestion_activities(dataset["id"], user=outsider["name"]) == []
+        assert self._ingestion_activities(dataset["id"], user="") == []
+
+    def test_success_is_public_on_public_datasets(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        self._start_run(resource["id"])
+
+        self._hook(resource_id=resource["id"], state="success")
+
+        assert len(self._ingestion_activities(dataset["id"], user="")) == 1
+
+    def test_repeated_final_call_records_once(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        self._start_run(resource["id"])
+
+        for _ in range(2):
+            self._hook(resource_id=resource["id"], state="success")
+
+        assert len(self._ingestion_activities(dataset["id"])) == 1
+
+    def test_each_run_records_its_outcome(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+
+        self._start_run(resource["id"], dag_run_id="run-1")
+        self._hook(resource_id=resource["id"], type="error", message="Boom")
+        self._start_run(resource["id"], dag_run_id="run-2")
+        self._hook(resource_id=resource["id"], state="success")
+
+        activities = self._ingestion_activities(dataset["id"], include_data=True)
+        assert [
+            (activity["activity_type"], activity["data"]["dag_run_id"])
+            for activity in activities
+        ] == [
+            (action.INGESTION_SUCCEEDED_ACTIVITY, "run-2"),
+            (action.INGESTION_FAILED_ACTIVITY, "run-1"),
+        ]
+
+    def test_progress_updates_record_nothing(self, mock_airflow_client):
+        dataset = factories.Dataset()
+        resource = factories.Resource(package_id=dataset["id"], format="CSV")
+        self._start_run(resource["id"])
+
+        self._hook(
+            resource_id=resource["id"],
+            state="running",
+            message="Upserting to BigQuery",
+        )
+
+        assert self._ingestion_activities(dataset["id"]) == []
