@@ -7,6 +7,7 @@ import ckan.plugins.toolkit as tk
 from ckan.model.domain_object import DomainObjectOperation
 from ckan.model.resource import Resource
 
+import ckanext.aircan.columns as columns
 import ckanext.aircan.helpers as helpers
 import ckanext.aircan.views as views
 from ckanext.aircan.logic import action, auth
@@ -62,6 +63,82 @@ def _retyped_columns(stored_schema, incoming_schema):
         if (incoming.get("type") or "") != (original.get("type") or ""):
             retyped.append(name)
     return retyped
+
+
+def _s3_config():
+    """Storage settings from ckanext-s3filestore, for reading an uploaded file."""
+    get = tk.config.get
+    return {
+        "bucket": get("ckanext.s3filestore.aws_bucket_name"),
+        "access_key": get("ckanext.s3filestore.aws_access_key_id_readonly")
+        or get("ckanext.s3filestore.aws_access_key_id"),
+        "secret_key": get("ckanext.s3filestore.aws_secret_access_key_readonly")
+        or get("ckanext.s3filestore.aws_secret_access_key"),
+        "host_name": get("ckanext.s3filestore.host_name"),
+        "storage_path": get("ckanext.s3filestore.aws_storage_path"),
+        "region_name": get("ckanext.s3filestore.region_name"),
+        "signature_version": get("ckanext.s3filestore.signature_version"),
+    }
+
+
+def _is_new_file(current, resource):
+    """True when this update brings a different file than the stored one.
+
+    A metadata-only save must not trigger a file read. The edit form re-sends
+    the stored URL on every save, so it signals a new upload through a changed
+    `last_modified` (the same signal the pipeline trigger uses); API callers
+    change the URL or send the file itself.
+    """
+    if resource.get("upload"):
+        return True
+    url = resource.get("url")
+    if url and url != current.get("url"):
+        return True
+    modified = resource.get("last_modified")
+    return bool(modified) and modified != current.get("last_modified")
+
+
+def _reject_column_changes(current, resource, stored_schema, incoming_schema):
+    """Append/upsert may not add or drop columns of an existing table.
+
+    Same rule the edit form applies, so API callers cannot bypass it. The new
+    file's header is read when the update brings a new file; if that cannot be
+    read, the schema sent with the update is still compared against the stored
+    one.
+    """
+    table_columns = list(_fields_by_name(stored_schema))
+    if not table_columns:
+        return
+
+    compared = []
+    if _is_new_file(current, resource):
+        url = resource.get("url") or current.get("url")
+        fmt = columns.normalize_format(
+            resource.get("format") or current.get("format"), url
+        )
+        file_columns = columns.read_source_columns(
+            url, resource.get("upload"), fmt, _s3_config()
+        )
+        if file_columns is None:
+            log.warning(
+                "Could not read the columns of the new file for resource %s; "
+                "falling back to the schema comparison.",
+                current.get("id"),
+            )
+        else:
+            compared.append(file_columns)
+    if incoming_schema is not None:
+        compared.append(list(_fields_by_name(incoming_schema)))
+
+    new, missing = set(), set()
+    for names in compared:
+        added, dropped = columns.compare_columns(table_columns, names)
+        new.update(added)
+        missing.update(dropped)
+    if new or missing:
+        raise tk.ValidationError(
+            {"schema": [tk._(columns.mismatch_message(sorted(new), sorted(missing)))]}
+        )
 
 
 class AircanPlugin(plugins.SingletonPlugin):
@@ -125,8 +202,8 @@ class AircanPlugin(plugins.SingletonPlugin):
 
     # IResourceController
     def before_resource_update(self, context, current, resource):
-        """Reject a type change to an existing datastore column when ingesting
-        with append/upsert.
+        """Reject a column change to an existing datastore table when ingesting
+        with append/upsert: a new or missing column, or a type change.
 
         BigQuery cannot re-type an existing column in place, so aircan can only
         honour a type change under "replace" (which rebuilds the table). The
@@ -149,9 +226,14 @@ class AircanPlugin(plugins.SingletonPlugin):
 
         incoming_schema = _parse_schema(resource.get("schema"))
         stored_schema = _parse_schema(current.get("schema"))
-        # No incoming schema (e.g. metadata-only update) or no stored schema to
-        # compare against -> nothing to enforce.
-        if incoming_schema is None or stored_schema is None:
+        # No stored schema to compare against -> nothing to enforce.
+        if stored_schema is None:
+            return
+
+        _reject_column_changes(current, resource, stored_schema, incoming_schema)
+
+        # No incoming schema (e.g. metadata-only update) -> no type change.
+        if incoming_schema is None:
             return
 
         retyped = _retyped_columns(stored_schema, incoming_schema)
