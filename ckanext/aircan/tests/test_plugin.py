@@ -1,5 +1,7 @@
 """Tests for plugin.py."""
 
+from unittest import mock
+
 import pytest
 
 import ckan.model as model
@@ -152,12 +154,14 @@ class TestTypeLockOnUpdate:
         current = {"ingestion_mode": "append", "schema": self.STORED}
         self._run(current, {"ingestion_mode": "append", "schema": self.RETYPE})
 
-    def test_new_column_allowed_on_append(self):
+    def test_new_column_rejected_on_append(self):
         incoming = {"fields": self.STORED["fields"] +
                     [{"name": "c", "type": "number"}]}
         current = {"datastore_active": True, "ingestion_mode": "append",
                    "schema": self.STORED}
-        self._run(current, {"ingestion_mode": "append", "schema": incoming})
+        with pytest.raises(tk.ValidationError) as exc:
+            self._run(current, {"ingestion_mode": "append", "schema": incoming})
+        assert "c" in exc.value.error_dict["schema"][0]
 
     def test_metadata_only_update_allowed(self):
         current = {"datastore_active": True, "ingestion_mode": "append",
@@ -170,3 +174,74 @@ class TestTypeLockOnUpdate:
                    "schema": self.STORED}
         with pytest.raises(tk.ValidationError):
             self._run(current, {"schema": self.RETYPE})
+
+
+class TestColumnSetOnUpdate:
+    """before_resource_update keeps append/upsert from adding or dropping
+    columns: it reads the new file's header, and falls back to the schema sent
+    with the update when the file cannot be read."""
+
+    STORED = {"fields": [{"name": "a", "type": "string"},
+                         {"name": "b", "type": "string"}]}
+
+    def _current(self, mode="append", **extra):
+        return {"id": "r1", "datastore_active": True, "ingestion_mode": mode,
+                "format": "CSV", "url": "https://x.test/old.csv",
+                "schema": self.STORED, **extra}
+
+    def _run(self, current, resource, file_columns):
+        with mock.patch("ckanext.aircan.plugin.columns.read_source_columns",
+                        return_value=file_columns) as read:
+            AircanPlugin().before_resource_update({}, current, resource)
+        return read
+
+    @pytest.mark.parametrize("mode", ["append", "upsert"])
+    def test_renamed_column_in_new_file_rejected(self, mode):
+        resource = {"ingestion_mode": mode, "url": "https://x.test/new.csv"}
+        with pytest.raises(tk.ValidationError) as exc:
+            self._run(self._current(mode), resource, ["a", "c"])
+        message = exc.value.error_dict["schema"][0]
+        assert "not in the table: c" in message
+        assert "missing from the file: b" in message
+
+    def test_matching_file_allowed_in_any_order(self):
+        resource = {"url": "https://x.test/new.csv"}
+        self._run(self._current(), resource, ["b", "a"])
+
+    def test_replace_may_change_columns(self):
+        resource = {"ingestion_mode": "replace", "url": "https://x.test/new.csv"}
+        read = self._run(self._current("replace"), resource, ["z"])
+        read.assert_not_called()
+
+    def test_no_table_yet_allows_anything(self):
+        current = self._current()
+        current["datastore_active"] = False
+        read = self._run(current, {"url": "https://x.test/new.csv"}, ["z"])
+        read.assert_not_called()
+
+    def test_metadata_only_update_does_not_read_the_file(self):
+        resource = {"url": "https://x.test/old.csv", "description": "changed"}
+        read = self._run(self._current(), resource, ["z"])
+        read.assert_not_called()
+
+    def test_changed_last_modified_counts_as_new_file(self):
+        # The edit form re-sends the stored URL and stamps last_modified.
+        current = self._current(last_modified="2026-01-01T00:00:00")
+        resource = {"url": "https://x.test/old.csv",
+                    "last_modified": "2026-11-18T10:00:00"}
+        with pytest.raises(tk.ValidationError):
+            self._run(current, resource, ["a"])
+
+    def test_unreadable_file_falls_back_to_schema(self):
+        extra = {"fields": self.STORED["fields"] + [{"name": "c", "type": "string"}]}
+        resource = {"url": "https://x.test/new.csv", "schema": extra}
+        with pytest.raises(tk.ValidationError) as exc:
+            self._run(self._current(), resource, None)
+        assert "not in the table: c" in exc.value.error_dict["schema"][0]
+
+    def test_unreadable_file_without_schema_is_allowed(self):
+        self._run(self._current(), {"url": "https://x.test/new.csv"}, None)
+
+    def test_system_columns_are_ignored(self):
+        resource = {"url": "https://x.test/new.csv"}
+        self._run(self._current(), resource, ["_id", "a", "b", "_updated_at"])
