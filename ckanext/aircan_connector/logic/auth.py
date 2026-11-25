@@ -1,4 +1,5 @@
 # encoding: utf-8
+import ckan.authz as authz
 import ckan.plugins as p
 
 
@@ -42,5 +43,12 @@ def aircan_clear_stale_precision_warnings(context, data_dict):
 @p.toolkit.auth_disallow_anonymous_access
 def aircan_error_list(context, data_dict):
     # Any logged-in user may call it; the action itself limits non-sysadmins to
-    # the organizations where they can edit datasets.
+    # the organizations where they can edit datasets. The decorator alone does
+    # not stop anonymous API calls on CKAN 2.10+: they carry an AnonymousUser
+    # object in auth_user_obj, which the decorator treats as logged in.
+    if authz.auth_is_anon_user(context):
+        return {
+            'success': False,
+            'msg': p.toolkit._('You must be logged in to list aircan errors'),
+        }
     return {'success': True}

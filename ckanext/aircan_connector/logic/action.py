@@ -964,6 +964,7 @@ def _resolve_organization_ids(model, names_or_ids, field):
     return ids
 
 
+@p.toolkit.side_effect_free
 def aircan_error_list(context, data_dict):
     '''List resources whose latest AirCan run ended in an error.
 
