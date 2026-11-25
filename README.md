@@ -119,6 +119,52 @@ CKAN__AIRFLOW__CLOUD__DAG_NAME=DAG_YOU_WANT_TO_TRIGGER
 }
 ```
 
+### Listing resources with aircan errors
+ Use `aircan_error_list` to list every resource whose latest aircan run ended in an error, newest first.
+ It reads the state CKAN stores from the Airflow callbacks, so one call covers the whole portal without
+ querying Airflow; use `aircan_status` on a resource for its live Airflow state and full logs.
+
+ Requires an API token. Sysadmins see all resources; other users only see resources in organizations
+ where they can edit datasets.
+
+| Parameter | Description |
+| --- | --- |
+| `since` | Only errors last updated at or after this ISO 8601 date/datetime (UTC), e.g. `2026-11-01` |
+| `organization` | Only these organizations (name or id; list or comma-separated) |
+| `exclude_organization` | Leave out these organizations (name or id; list or comma-separated) |
+| `limit` | Maximum results, default 100, max 1000 |
+| `offset` | Results to skip, default 0 |
+
+```bash
+curl -H "Authorization: $CKAN_API_TOKEN" \
+  "http://YOUR-CKAN:5000/api/3/action/aircan_error_list?since=2026-11-01&exclude_organization=my-org"
+```
+
+```json
+{
+  "count": 1,
+  "results": [
+    {
+      "resource_id": "a4a520aa-c790-4b53-93aa-de61e1a2813c",
+      "resource_name": "data.csv",
+      "resource_url": "http://YOUR-CKAN:5000/dataset/my-dataset/resource/a4a520aa-c790-4b53-93aa-de61e1a2813c",
+      "package_id": "95757ba7-c7fd-4966-8fd2-78cf22cefd8e",
+      "package_name": "my-dataset",
+      "package_title": "My dataset",
+      "package_url": "http://YOUR-CKAN:5000/dataset/my-dataset",
+      "private": false,
+      "organization": "my-org",
+      "organization_title": "My Org",
+      "status": "error",
+      "last_updated": "2026-11-24T17:10:46.855116",
+      "error_message": "Failed to push data records.",
+      "last_log_message": "Pusing dataset records.",
+      "dag_run_id": "394a1f0f-d8b3-47f2-9a51-08732349b785"
+    }
+  ]
+}
+```
+
 # Tests with Cypress
 
 Test the aircan-connector with cypress.

@@ -117,6 +117,7 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
             'aircan_status_update': action.aircan_status_update,
             'aircan_clear_stale_precision_warnings':
                 action.aircan_clear_stale_precision_warnings,
+            'aircan_error_list': action.aircan_error_list,
             #'datastore_info': action.datastore_info
         }
 
@@ -131,7 +132,8 @@ class Aircan_ConnectorPlugin(p.SingletonPlugin):
             'aircan_submit': auth.aircan_submit,
             'aircan_status': auth.aircan_status,
             'aircan_clear_stale_precision_warnings':
-                auth.aircan_clear_stale_precision_warnings
+                auth.aircan_clear_stale_precision_warnings,
+            'aircan_error_list': auth.aircan_error_list,
         }
 
     

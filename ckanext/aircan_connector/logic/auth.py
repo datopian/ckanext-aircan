@@ -37,3 +37,10 @@ def aircan_clear_stale_precision_warnings(context, data_dict):
         'success': False,
         'msg': p.toolkit._('Only sysadmins can clear precision warnings in bulk'),
     }
+
+
+@p.toolkit.auth_disallow_anonymous_access
+def aircan_error_list(context, data_dict):
+    # Any logged-in user may call it; the action itself limits non-sysadmins to
+    # the organizations where they can edit datasets.
+    return {'success': True}

@@ -17,6 +17,7 @@ import ckan.lib.jobs as jobs
 
 from ckan.common import request
 from ckanext.aircan_connector.lib.airflow import AirflowClient
+import ckan.authz as authz
 import ckan.logic as logic
 import ckan.plugins as p
 import ckan.lib.helpers as h
@@ -874,3 +875,203 @@ def aircan_clear_stale_precision_warnings(context, data_dict):
         'unreadable_count': len(unreadable),
         'unreadable': unreadable,
     }
+
+
+AIRCAN_ERROR_LIST_DEFAULT_LIMIT = 100
+AIRCAN_ERROR_LIST_MAX_LIMIT = 1000
+
+
+def _as_list(value):
+    '''Accept a single value, a comma-separated string or a list.'''
+    if value is None or value == '':
+        return []
+    if isinstance(value, (list, tuple)):
+        items = value
+    else:
+        items = str(value).split(',')
+    return [str(v).strip() for v in items if str(v).strip()]
+
+
+def _parse_since(value):
+    '''Parse an ISO 8601 date or datetime into a naive UTC datetime.
+
+    task_status.last_updated is stored as naive UTC, so aware inputs are
+    converted to UTC and stripped of their tzinfo before comparing.
+    '''
+    if value is None or value == '':
+        return None
+    text = str(value).strip()
+    if text.endswith(('Z', 'z')):
+        text = text[:-1] + '+00:00'
+    try:
+        parsed = datetime.datetime.fromisoformat(text)
+    except ValueError:
+        raise ValidationError({
+            'since': ['Expected an ISO 8601 date or datetime, e.g. 2026-11-01'
+                      ' or 2026-11-01T09:00:00Z']
+        })
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _parse_limit(value, default, maximum, field):
+    if value is None or value == '':
+        return default
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError({field: ['Must be a whole number']})
+    if number < 0:
+        raise ValidationError({field: ['Must be zero or greater']})
+    return min(number, maximum)
+
+
+def _load_json(text, default):
+    if not text:
+        return default
+    try:
+        loaded = json.loads(text)
+    except (TypeError, ValueError):
+        return default
+    return loaded if loaded is not None else default
+
+
+def _error_message(error):
+    if isinstance(error, dict):
+        return error.get('message') or None
+    if isinstance(error, str):
+        return error or None
+    return None
+
+
+def _last_log_message(value):
+    logs = value.get('logs') if isinstance(value, dict) else None
+    if isinstance(logs, list) and logs:
+        last = logs[-1]
+        if isinstance(last, dict):
+            return last.get('message') or None
+    return None
+
+
+def _resolve_organization_ids(model, names_or_ids, field):
+    ids = []
+    for name_or_id in names_or_ids:
+        group = model.Group.get(name_or_id)
+        if not group or not group.is_organization:
+            raise ValidationError({field: ['Organization not found: {0}'.format(name_or_id)]})
+        ids.append(group.id)
+    return ids
+
+
+def aircan_error_list(context, data_dict):
+    '''List resources whose latest AirCan run ended in an error.
+
+    Reads the AirCan state CKAN stores for every resource (the ``task_status``
+    rows written by ``aircan_status_update`` from the Airflow callbacks), so a
+    single call covers the whole portal and Airflow is not queried. Use
+    ``aircan_status`` on a resource to get its live Airflow state and full logs.
+
+    Sysadmins see every resource. Other logged-in users only see resources in
+    organizations where they can edit datasets.
+
+    :param since: only errors last updated at or after this ISO 8601 date or
+        datetime (UTC), e.g. ``2026-11-01`` (optional)
+    :type since: string
+    :param organization: only these organizations, by name or id; a list or a
+        comma-separated string (optional)
+    :type organization: list or string
+    :param exclude_organization: leave out these organizations, by name or id;
+        a list or a comma-separated string (optional)
+    :type exclude_organization: list or string
+    :param limit: maximum number of results (optional, default 100, max 1000)
+    :type limit: int
+    :param offset: number of results to skip (optional, default 0)
+    :type offset: int
+    :returns: ``count`` (total matching errors) and ``results``, newest first
+    :rtype: dictionary
+    '''
+    check_access('aircan_error_list', context, data_dict)
+    model = context['model']
+
+    since = _parse_since(data_dict.get('since'))
+    limit = _parse_limit(
+        data_dict.get('limit'), AIRCAN_ERROR_LIST_DEFAULT_LIMIT,
+        AIRCAN_ERROR_LIST_MAX_LIMIT, 'limit',
+    )
+    offset = _parse_limit(data_dict.get('offset'), 0, float('inf'), 'offset')
+    include_orgs = _resolve_organization_ids(
+        model, _as_list(data_dict.get('organization')), 'organization'
+    )
+    exclude_orgs = _resolve_organization_ids(
+        model, _as_list(data_dict.get('exclude_organization')), 'exclude_organization'
+    )
+
+    query = (
+        model.Session.query(model.TaskStatus, model.Resource, model.Package, model.Group)
+        .join(model.Resource, model.Resource.id == model.TaskStatus.entity_id)
+        .join(model.Package, model.Package.id == model.Resource.package_id)
+        .outerjoin(model.Group, model.Group.id == model.Package.owner_org)
+        .filter(model.TaskStatus.task_type == 'aircan')
+        .filter(model.TaskStatus.key == 'aircan')
+        .filter(model.TaskStatus.state == 'error')
+        .filter(model.Resource.state == 'active')
+        .filter(model.Package.state == 'active')
+    )
+
+    user = context.get('user')
+    if not authz.is_sysadmin(user):
+        editable = get_action('organization_list_for_user')(
+            {'model': model, 'user': user},
+            {'permission': 'update_dataset', 'include_dataset_count': False},
+        )
+        editable_ids = [org['id'] for org in editable]
+        if not editable_ids:
+            return {'count': 0, 'results': []}
+        query = query.filter(model.Package.owner_org.in_(editable_ids))
+
+    if include_orgs:
+        query = query.filter(model.Package.owner_org.in_(include_orgs))
+    if exclude_orgs:
+        query = query.filter(
+            (model.Package.owner_org.is_(None))
+            | (~model.Package.owner_org.in_(exclude_orgs))
+        )
+    if since is not None:
+        query = query.filter(model.TaskStatus.last_updated >= since)
+
+    count = query.count()
+    rows = (
+        query.order_by(model.TaskStatus.last_updated.desc(), model.Resource.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for task, res, pkg, org in rows:
+        value = _load_json(task.value, {})
+        error = _load_json(task.error, {})
+        results.append({
+            'resource_id': res.id,
+            'resource_name': res.name,
+            'resource_url': p.toolkit.url_for(
+                'resource.read', id=pkg.name, resource_id=res.id, _external=True
+            ),
+            'package_id': pkg.id,
+            'package_name': pkg.name,
+            'package_title': pkg.title,
+            'package_url': p.toolkit.url_for(
+                'dataset.read', id=pkg.name, _external=True
+            ),
+            'private': bool(pkg.private),
+            'organization': org.name if org else None,
+            'organization_title': org.title if org else None,
+            'status': task.state,
+            'last_updated': task.last_updated.isoformat() if task.last_updated else None,
+            'error_message': _error_message(error),
+            'last_log_message': _last_log_message(value),
+            'dag_run_id': value.get('dag_run_id') if isinstance(value, dict) else None,
+        })
+
+    return {'count': count, 'results': results}

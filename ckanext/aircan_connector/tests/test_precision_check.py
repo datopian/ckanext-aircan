@@ -12,7 +12,7 @@ import pytest
 # ── Stub out every CKAN / third-party module that action.py imports ──────────
 # This lets the tests run outside the Docker container.
 _CKAN_STUBS = [
-    'ckan', 'ckan.common', 'ckan.plugins', 'ckan.plugins.toolkit',
+    'ckan', 'ckan.authz', 'ckan.common', 'ckan.plugins', 'ckan.plugins.toolkit',
     'ckan.logic', 'ckan.lib', 'ckan.lib.jobs', 'ckan.lib.helpers',
     'ckan.lib.uploader', 'ckan.config', 'ckan.config.middleware',
     'ckanext.aircan_connector.lib', 'ckanext.aircan_connector.lib.airflow',
